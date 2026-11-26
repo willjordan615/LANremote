@@ -11,6 +11,16 @@ final class WakeAddress {
   if(s.equals("000000000000")||(Integer.parseInt(s.substring(0,2),16)&1)!=0)return "";
   StringBuilder b=new StringBuilder();for(int i=0;i<12;i+=2){if(i>0)b.append(':');b.append(s,i,i+2);}return b.toString();
  }
+ static java.util.Map<String,String> candidates(String saved,boolean manual,String wired,String wifi){
+  java.util.Map<String,String> result=new java.util.LinkedHashMap<>();
+  if(manual)add(result,saved,"manual");
+  add(result,wifi,"TV Wi-Fi");add(result,wired,"TV Ethernet");
+  if(!manual)add(result,saved,"previously saved");
+  return result;
+ }
+ private static void add(java.util.Map<String,String> map,String value,String source){
+  String normalized=normalize(value);if(!normalized.isEmpty())map.merge(normalized,source,(a,b)->a+" / "+b);
+ }
  static String choose(String target,String wiredMac,String wifiMac,String wiredIp,String wifiIp,String wiredState,String wifiState){
   String w=normalize(wiredMac),f=normalize(wifiMac);
   boolean wm=target.equals(wiredIp)&&!"disconnected".equalsIgnoreCase(wiredState),fm=target.equals(wifiIp)&&!"disconnected".equalsIgnoreCase(wifiState);
