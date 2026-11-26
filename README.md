@@ -86,3 +86,6 @@ Manual override is exclusive: only the manually configured MAC is sent. Without 
 
 ## Router MAC guidance (0.6.4)
 If TV network requests yield no usable wake address and there is no cached or manual address, TV setup and Power on direct the user to the TV's MAC in their router or mesh app's connected-device list. Enter TV MAC from router opens a guided manual override dialog. Unconfirmed wake attempts also explain this fallback without claiming the MAC is necessarily incorrect. Never ask for the router's own MAC or credentials. Existing automatic/manual selection remains unchanged.
+
+## Explicit remote session (0.6.5)
+Start remote session in the normal app while unlocked, then use the device power button to lock it. Android's showWhenLocked activity support may retain the limited remote on wake; no keyguard dismissal, forced wake, screen-on flag, overlay or authentication workaround is used. Session supports box navigation, clicks, menu, volume and playback, and existing LG paired TV navigation, volume, playback, HDMI and power. Saved TV identity and pairing are required; no configuration, trust or pairing dialogs, keyboard, diagnostics or credential changes are exposed in the session. Close exits the session. Notification launch may require unlocking. OEM behavior must be verified on a physical phone.
