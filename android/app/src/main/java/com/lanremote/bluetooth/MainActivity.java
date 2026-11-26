@@ -27,7 +27,7 @@ public class MainActivity extends Activity {
   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(16),dp(18),dp(16),dp(18));scroll.addView(root);setContentView(scroll);
-  TextView title=new TextView(this);title.setText("LAN Remote • Bluetooth 0.3.2");title.setTextSize(24);root.addView(title);
+  TextView title=new TextView(this);title.setText("LAN Remote • Bluetooth 0.3.3");title.setTextSize(24);root.addView(title);
   status=new TextView(this);status.setTextSize(16);status.setPadding(0,dp(10),0,dp(10));root.addView(status);
   root.addView(action("1. Enable Bluetooth remote",()->startHid()));
   root.addView(action("2. Make phone discoverable",()->discoverable()));

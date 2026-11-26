@@ -40,11 +40,8 @@ jobs:
             printf '%s' "$SIGNING_KEY" | base64 -d > "$keystore"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign --ks "$keystore" --ks-key-alias lanremote --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD --out LANRemote-Bluetooth.apk "$input"
             echo "SIGNING_KIND=stable" >> "$GITHUB_ENV"
-          elif [[ -z "$SIGNING_KEY" && -z "$SIGNING_PASSWORD" ]]; then
-            cp "$input" LANRemote-Bluetooth.apk
-            echo "SIGNING_KIND=debug" >> "$GITHUB_ENV"
           else
-            echo "Both signing secrets must be configured together" >&2
+            echo "Both permanent signing secrets are required for release builds" >&2
             exit 1
           fi
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify LANRemote-Bluetooth.apk
@@ -55,9 +52,9 @@ jobs:
         with:
           name: LANRemote-Bluetooth
           path: LANRemote-Bluetooth.apk
-      - name: Publish installable debug APK
+      - name: Publish permanently signed APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          printf 'LANREMOTE_VERSION_CODE: %s\nLANREMOTE_SIGNING: %s\n\nAndroid 9+. Bluetooth HID compatibility depends on the phone and TV. Android requires confirmation for updates. Debug builds may require manual reinstall.\n' "$APP_CODE" "$SIGNING_KIND" > release-notes.txt
-          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "Bluetooth prototype build ${GITHUB_RUN_NUMBER}" --notes-file release-notes.txt
+          printf 'LANREMOTE_VERSION_CODE: %s\nLANREMOTE_SIGNING: %s\n\nAndroid 9+. Bluetooth HID compatibility depends on the phone and TV. Android requires confirmation for updates. First migration from a debug-signed build requires manual reinstall.\n' "$APP_CODE" "$SIGNING_KIND" > release-notes.txt
+          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "Bluetooth prototype build ${GITHUB_RUN_NUMBER}" --notes-file release-notes.txt --latest
