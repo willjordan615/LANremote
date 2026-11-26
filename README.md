@@ -45,3 +45,6 @@ The header has a shared TV power icon for both modes. vSeeBox mouse buttons shar
 
 ## Settings shortcut (0.4.5)
 The vacant vSeeBox directional-pad corner now contains a gear icon that expands and scrolls to Bluetooth setup. It remains available while disconnected. The existing Menu command and bottom setup toggle remain unchanged.
+
+## LG settings shortcut (0.4.6)
+Tap the gear in vSeeBox mode to switch to LG TV navigation and send MENU to open TV quick settings, connecting first if needed. Hold either mode's gear to open a phone picture-mode selector. Current mode is queried when supported; options are common SDR modes and depend on TV firmware and input. Writes use the direct SSAP settings endpoint only; a rejection or timeout offers normal TV quick settings rather than attempting any permission bypass. Bluetooth setup remains available at the bottom and the connection is not interrupted. The existing vSeeBox Menu command is unchanged. Hardware testing required.
