@@ -36,3 +36,6 @@ Bluetooth now advertises a composite keyboard/mouse HID descriptor with unchange
 
 ## Compact remote (0.4.2)
 Back restores the original Escape keyboard report; Right click separately sends mouse button 2. OK and left click retain their existing mappings. Both modes use compact 48 dp button rows and collapsible setup, keeping common controls on the main screen. Scrolling remains available for smaller displays, larger fonts and expanded setup. No Bluetooth descriptor or connection changes in this version.
+
+## Quick TV controls (0.4.3)
+Both modes have HDMI 1–3 and explicit LG TV power on/off choices. HDMI and power-off use the TV's paired Wi-Fi control session, connecting if needed; Bluetooth is unchanged. Wake-on-LAN requires the TV's active network adapter MAC address saved under LG TV setup, supported networked standby enabled, and a phone on the same subnet. Wake packet transmission is not proof that the TV starts. Backspace, Space, and Tab remain in the vSeeBox keyboard dialog under Keys. Setup moved below the main controls. Hardware testing required.
