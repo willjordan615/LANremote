@@ -15,11 +15,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Install required Android SDK packages
+        run: |
+          sdkmanager --version
+          sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
       - run: gradle -p android :app:assembleDebug
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk LANRemote-Bluetooth.apk
       - uses: actions/upload-artifact@v4
