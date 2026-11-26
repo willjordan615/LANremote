@@ -89,6 +89,7 @@ final class LgRemote {
  void sessionOff(){if(sessionOnly&&paired)request("system/turnOff",null);}
  void setObserver(Runnable r){observer=r;}
  boolean ready(boolean needPointer){return paired&&(!needPointer||pointerReady);}
+ void movePointer(int x,int y){if(!ready(true)||pointer==null||!RelayWire.validMovement(x,y))return;if(pointer.queueSize()>4096)return;if(!pointer.send("type:move\ndx:"+x+"\ndy:"+y+"\ndown:0\n\n"))message("TV pointer unavailable.");}
  void remoteAction(String command){
   if("volumeDown".equals(command)||"volumeUp".equals(command)){request("audio/"+command,null);return;}
   if("playPause".equals(command)){new AlertDialog.Builder(activity).setTitle("TV playback").setItems(new String[]{"Play","Pause"},(d,i)->button(i==0?"PLAY":"PAUSE")).setNegativeButton("Cancel",null).show();return;}

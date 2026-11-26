@@ -11,6 +11,7 @@ final class HidKeys {
   if(id==3)return new byte[]{(byte)(usage&7),0,0};
   throw new IllegalArgumentException("Unknown HID report");
  }
+ static byte[] movement(int x,int y){if(x<-127||x>127||y<-127||y>127)throw new IllegalArgumentException("Invalid mouse delta");return new byte[]{0,(byte)x,(byte)y};}
  // Standard US keyboard layout. Reject unsupported characters before sending anything.
  static List<byte[]> text(String text){
   if(text.length()>500)throw new IllegalArgumentException("Send up to 500 characters at a time.");

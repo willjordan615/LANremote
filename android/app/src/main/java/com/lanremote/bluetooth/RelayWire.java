@@ -40,5 +40,7 @@ final class RelayWire {
   if(report==2)return Arrays.asList(0x223,0x40,0xea,0xe2,0xe9,0xb6,0xcd,0xb5).contains(usage);
   return report==3&&(usage==1||usage==2);
  }
+ static boolean validMovement(int x,int y){return x>=-127&&x<=127&&y>=-127&&y<=127&&(x!=0||y!=0);}
+ static byte[] movement(int x,int y){if(!validMovement(x,y))throw new IllegalArgumentException("Invalid mouse delta");return new byte[]{3,(byte)x,(byte)y};}
  static byte[] text(String text){HidKeys.text(text);byte[] raw=text.getBytes(StandardCharsets.UTF_8);byte[] b=new byte[raw.length+1];b[0]=2;System.arraycopy(raw,0,b,1,raw.length);return b;}
 }

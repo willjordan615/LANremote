@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
  private LgRemote lg;
  private LinearLayout bluetoothPanel;
  private boolean tvMode;
+ private Touchpad touchpad;
  private Button boxModeButton,tvModeButton;
  private final Map<Button,Boolean> pointerControls=new HashMap<>();
  private final Map<Button,String[]> modeLabels=new HashMap<>();
@@ -49,7 +50,7 @@ public class MainActivity extends Activity {
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(8),dp(12),dp(8));root.setBackgroundColor(RemoteTheme.BG);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
-  TextView title=new TextView(this);title.setText("LAN Remote • 0.6.5");title.setTextSize(20);title.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
+  TextView title=new TextView(this);title.setText("LAN Remote • 0.6.6");title.setTextSize(20);title.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
   Button power=action("TV power",()->lg.powerDialog());((RemoteButton)power).icon("power","TV power on or off");header.addView(power,new LinearLayout.LayoutParams(dp(52),dp(48)));
   boxModeButton=action("vSeeBox",()->selectMode(false));tvModeButton=action("LG TV",()->selectMode(true));row(root,boxModeButton,tvModeButton);
   status=new TextView(this);status.setTextSize(13);RemoteTheme.secondary(status);status.setPadding(0,dp(4),0,dp(4));root.addView(status);
@@ -63,6 +64,7 @@ public class MainActivity extends Activity {
   Button menu=dual("Menu",2,0x40,"INPUT",true);modeLabels.put(menu,new String[]{"Menu","Inputs"});
   row(root,settings,dual("▼",1,0x51,"DOWN",true),menu);
   gap(root,10);
+  touchpad=new Touchpad(this,this::movePointer,()->{if(tvMode){if(lg!=null&&lg.ready(true))lg.remoteAction("click");}else send(3,1);});root.addView(touchpad);
   mouseRow(root);
   gap(root,10);
   row(root,dual("Vol −",2,0xEA,"volumeDown",false),dual("Mute",2,0xE2,"MUTE",true),dual("Vol +",2,0xE9,"volumeUp",false));
@@ -98,7 +100,8 @@ public class MainActivity extends Activity {
   refreshControls();
  }
  private void gap(LinearLayout parent,int height){View v=new View(this);parent.addView(v,new LinearLayout.LayoutParams(-1,dp(height)));}
- private void refreshControls(){boolean bt=!relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer):bt);}}
+ private void movePointer(int x,int y){if(tvMode){if(lg!=null)lg.movePointer(x,y);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.movePointer(x,y);}else if(service!=null)service.movePointer(x,y);}
+ private void refreshControls(){boolean bt=!relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer):bt);}if(touchpad!=null)touchpad.available(tvMode?lg!=null&&lg.ready(true):bt);}
  private Button dualAction(String label,Runnable bluetooth,Runnable tv,boolean pointer){Button b=action(label,()->{if(tvMode)tv.run();else bluetooth.run();});controls.add(b);pointerControls.put(b,pointer);b.setEnabled(false);return b;}
  private Button dual(String label,int report,int usage,String tv,boolean pointer){return dualAction(label,()->send(report,usage),()->lg.remoteAction(tv),pointer);}
 

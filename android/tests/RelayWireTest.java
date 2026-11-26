@@ -4,6 +4,9 @@ import java.util.Arrays;
 public class RelayWireTest {
  static void check(boolean b){if(!b)throw new AssertionError();}
  public static void main(String[] args)throws Exception{
+  if(!java.util.Arrays.equals(RelayWire.movement(-127,127),new byte[]{3,-127,127}))throw new AssertionError("Relay mouse movement");
+  if(RelayWire.validMovement(-128,1)||RelayWire.validMovement(0,0)||!RelayWire.validMovement(1,-1))throw new AssertionError("Relay mouse validation");
+
   byte[] key=RelayWire.random(32),challenge=RelayWire.random(16);
   RelayWire.Invite invite=new RelayWire.Invite("192.168.1.20",key);
   check(Arrays.equals(key,RelayWire.Invite.parse(invite.encode()).key));
