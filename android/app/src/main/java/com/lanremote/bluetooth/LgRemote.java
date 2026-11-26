@@ -43,7 +43,7 @@ final class LgRemote {
  LgRemote(Activity a,LinearLayout parent){activity=a;prefs=a.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);
   panel=new LinearLayout(a);panel.setOrientation(LinearLayout.VERTICAL);parent.addView(panel);panel.setVisibility(View.GONE);
   status=new TextView(a);status.setTextSize(13);status.setPadding(0,dp(4),0,dp(4));
-  LinearLayout setup=new LinearLayout(a);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
+  LinearLayout setup=new LinearLayout(a);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);RemoteTheme.setup(setup);
   Button setupToggle=action("TV setup ▾",()->{});setupToggle.setOnClickListener(v->{boolean show=setup.getVisibility()!=View.VISIBLE;setup.setVisibility(show?View.VISIBLE:View.GONE);setupToggle.setText(show?"TV setup ▴":"TV setup ▾");});
   ip=new EditText(a);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_PHONE);ip.setHint("LG TV IPv4 address");ip.setText(prefs.getString("address","192.168.68.66"));setup.addView(ip);
   mac=new EditText(a);mac.setSingleLine(true);mac.setHint("TV MAC address (for power on)");mac.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);mac.setText(prefs.getString("wake_mac_"+ip.getText().toString().trim(),""));setup.addView(mac);
@@ -51,7 +51,7 @@ final class LgRemote {
   legacy=new CheckBox(a);legacy.setText("Legacy unencrypted Wi-Fi (port 3000)");legacy.setChecked(prefs.getBoolean("legacy",false));setup.addView(legacy);
   rowIn(setup,action("Connect / pair",()->connect()),action("Disconnect",()->disconnect("Disconnected.")));
   setup.addView(action("Forget TV pairing / certificate",()->new AlertDialog.Builder(activity).setMessage("Forget the saved TV identity and pairing? Only do this if the TV was reset or its certificate changed.").setPositiveButton("Forget",(d,w)->{String s=ip.getText().toString().trim();disconnect("Pairing forgotten. Connect again.");prefs.edit().remove("pin_"+s).remove("key_"+s).remove("key_legacy_"+s).apply();}).setNegativeButton("Cancel",null).show()));
-  TextView hint=new TextView(a);hint.setTextSize(13);hint.setText("Accept pairing on the TV. SIMPLINK depends on attached devices. For power on, enable TV On With Mobile / Turn on via Wi-Fi and save the TV network MAC address.");setup.addView(hint);
+  TextView hint=new TextView(a);hint.setTextSize(13);RemoteTheme.secondary(hint);hint.setText("Accept pairing on the TV. SIMPLINK depends on attached devices. For power on, enable TV On With Mobile / Turn on via Wi-Fi and save the TV network MAC address.");setup.addView(hint);
   inputs=new Spinner(a);setup.addView(inputs,new LinearLayout.LayoutParams(-1,dp(48)));
   rowIn(setup,command("Refresh HDMI",()->loadInputs()),command("Switch input",()->switchInput()));
   rowIn(setup,command("Ch −",()->button("CHANNELDOWN")),command("Ch +",()->button("CHANNELUP")));

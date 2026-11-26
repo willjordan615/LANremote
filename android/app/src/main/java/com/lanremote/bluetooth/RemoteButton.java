@@ -10,7 +10,7 @@ import android.widget.Button;
 final class RemoteButton extends Button {
  private final Paint ink=new Paint(Paint.ANTI_ALIAS_FLAG);
  private String icon="";
- RemoteButton(Context context){super(context);}
+ RemoteButton(Context context){super(context);RemoteTheme.button(this);}
  void icon(String kind,String description){icon=kind;setText("");setContentDescription(description);invalidate();}
  @Override protected void onDraw(Canvas canvas){
   super.onDraw(canvas);if(icon.isEmpty())return;

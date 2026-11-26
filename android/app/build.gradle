@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'com.lanremote.bluetooth'
  compileSdk 34
- defaultConfig { applicationId 'com.lanremote.bluetooth'; minSdk 28; targetSdk 34; versionCode 12; versionName '0.4.7' }
+ defaultConfig { applicationId 'com.lanremote.bluetooth'; minSdk 28; targetSdk 34; versionCode 13; versionName '0.4.8' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 

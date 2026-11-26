@@ -51,3 +51,6 @@ Tap the gear in vSeeBox mode to switch to LG TV navigation and send MENU to open
 
 ## Shared remote layout (0.4.7)
 Both modes now use the same actual controls and group spacing. The selected mode routes navigation, keyboard, volume and media to Bluetooth or LG Wi-Fi. LG mode replaces mouse Left/Right with pointer Click/Exit, Menu with Inputs, and Previous/Next with Rewind/Fast forward. LG Play/Pause offers explicit choices. Power, HDMI and gear always address the LG TV. Gear tap opens native quick settings and hold attempts to open native picture settings; if that launch is rejected or times out, quick settings opens instead. Direct picture-mode writes have been removed. Both connection statuses stay visible. Channel and other TV-specific controls remain in TV setup. Hardware testing required.
+
+## Native dark theme (0.4.8)
+Always-dark native Android theme: charcoal background, rounded low-elevation controls, neutral monochrome palette, explicit selected and disabled states, dark app dialogs and system bars. Shared layout and remote protocols unchanged; no extra dependencies. System keyboard and Android installer retain their own themes. Physical visual verification pending.
