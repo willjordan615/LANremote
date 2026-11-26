@@ -31,7 +31,7 @@ final class WakeDiagnostic implements AutoCloseable {
   int sent=0;
   try{
    if(!RelayWire.privateIP(target))throw new IllegalArgumentException("Select a valid local TV address first.");
-   if(candidates.isEmpty())throw new IllegalArgumentException("No valid wake address saved. Turn the TV on and connect to learn its addresses, or use manual setup.");
+   if(candidates.isEmpty())throw new IllegalArgumentException("No valid wake address saved. Turn the TV on and connect once to learn its addresses. If none are found, open your router or mesh app, find the LG TV in connected devices, and enter the TV MAC in TV setup (not the router’s own MAC).");
    Map<String,byte[]> packets=new LinkedHashMap<>();for(String mac:candidates.keySet())packets.put(mac,WakePacket.create(mac));
    report.append("Address formats: valid (not proof of TV identity)\n");
    publish("Power on: address valid; checking Wi-Fi…",report,false);
@@ -58,7 +58,7 @@ final class WakeDiagnostic implements AutoCloseable {
     if(reachable(wifi,tv)){long seconds=(SystemClock.elapsedRealtime()-start+999)/1000;report.append("Result: TV control port became reachable after about ").append(seconds).append(" seconds.\nThis suggests wake succeeded; screen state and which address worked are not verified.");publish("Power on: TV control service is reachable.",report,true);return;}
     Thread.sleep(1100);
    }
-   if(!cancelled){report.append("Result: no response from the configured TV control port within 30 seconds.\nCheck Turn on via Wi-Fi, active Wi-Fi MAC, and standby settings. The TV may also have changed IP or blocked the control port.");publish("Power on: packets sent; TV did not respond.",report,true);}
+   if(!cancelled){report.append("Result: no response from the configured TV control port within 30 seconds.\nCheck Turn on via Wi-Fi and standby settings. If enabled, check the TV MAC shown in your router or mesh app’s connected-device list. It may differ from the TV settings address. Use TV setup → Enter TV MAC from router to save it. The TV may also have changed IP or blocked the control port.");publish("Power on: packets sent; TV did not respond.",report,true);}
   }catch(Exception e){if(!cancelled){report.append("Wake packets sent: ").append(sent).append("\nResult: ").append(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());publish("Power on: "+(sent==0?"could not send wake request.":"wake test interrupted."),report,true);}}
  }
  @Override public void close(){cancelled=true;Thread t=worker;if(t!=null)t.interrupt();DatagramSocket d=datagram;if(d!=null)d.close();Socket s=probe;if(s!=null)try{s.close();}catch(IOException ignored){}}

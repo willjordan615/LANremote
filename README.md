@@ -83,3 +83,6 @@ On pairing or power-on setup, store valid wired and wireless addresses separatel
 
 ## Manual wake override (0.6.3)
 Manual override is exclusive: only the manually configured MAC is sent. Without it, the paired TV's learned Wi-Fi and Ethernet MACs are both used, deduplicated; an older saved automatic address is used only if neither learned address exists. Manual power-on setup offers Use automatic to clear the override without discarding the two learned addresses. The manual field no longer displays a learned address as if manually entered. Tests cover exclusive override, automatic candidates, missing addresses and migration fallback.
+
+## Router MAC guidance (0.6.4)
+If TV network requests yield no usable wake address and there is no cached or manual address, TV setup and Power on direct the user to the TV's MAC in their router or mesh app's connected-device list. Enter TV MAC from router opens a guided manual override dialog. Unconfirmed wake attempts also explain this fallback without claiming the MAC is necessarily incorrect. Never ask for the router's own MAC or credentials. Existing automatic/manual selection remains unchanged.
