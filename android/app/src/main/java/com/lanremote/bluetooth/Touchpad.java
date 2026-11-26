@@ -21,7 +21,7 @@ final class Touchpad extends LinearLayout {
   toggle.setOnClickListener(v->{boolean open=pad.getVisibility()!=VISIBLE;reset();pad.setVisibility(open?VISIBLE:GONE);toggle.setText(open?"Touchpad ▴":"Touchpad ▾");toggle.setSelected(open);});
   pad.setOnTouchListener((v,e)->touch(e));pad.setOnClickListener(v->{if(pad.isEnabled())click.run();});
  }
- void available(boolean ready){if(pad.isEnabled()==ready)return;pad.setEnabled(ready);pad.setText(ready?"Drag to move • Tap to click":"Connect your device to move the cursor");if(!ready)reset();}
+ void available(boolean ready,String unavailable){String label=ready?"Drag to move • Tap to click":unavailable;if(pad.isEnabled()==ready&&label.contentEquals(pad.getText()))return;pad.setEnabled(ready);pad.setText(label);if(!ready)reset();}
  private void reset(){tracking=false;moved=false;dx=dy=0;if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);}
  private void flush(){int x=Math.max(-127,Math.min(127,Math.round(dx))),y=Math.max(-127,Math.min(127,Math.round(dy)));dx=dy=0;if(x!=0||y!=0){motion.move(x,y);lastSent=SystemClock.uptimeMillis();}}
  private boolean touch(MotionEvent e){
