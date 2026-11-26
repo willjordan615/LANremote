@@ -12,6 +12,7 @@
  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
  <application android:label="LAN Remote Bluetooth" android:theme="@style/LanRemoteTheme" android:allowBackup="false" android:usesCleartextTraffic="true">
   <service android:name=".RemoteService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
+  <activity android:name=".LockRemoteActivity" android:exported="false" android:excludeFromRecents="true"/>
   <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
  </application>
 </manifest>

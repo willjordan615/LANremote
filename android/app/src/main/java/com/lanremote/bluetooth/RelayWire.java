@@ -13,10 +13,12 @@ final class RelayWire {
  static final SecureRandom RANDOM=new SecureRandom();
  static byte[] random(int size){byte[] b=new byte[size];RANDOM.nextBytes(b);return b;}
  static final class Invite {
-  final String ip;final byte[] key;
-  Invite(String ip,byte[] key){this.ip=ip;this.key=key.clone();}
-  String encode(){return "LANREMOTE1:"+ip+":"+Base64.getUrlEncoder().withoutPadding().encodeToString(key);}
-  static Invite parse(String input){String[] fields=input.trim().split(":",-1);if(fields.length!=3||!fields[0].equals("LANREMOTE1")||!privateIP(fields[1]))throw new IllegalArgumentException("Invalid LANremote invitation.");byte[] key=Base64.getUrlDecoder().decode(fields[2]);if(key.length!=32)throw new IllegalArgumentException("Invalid invitation key.");return new Invite(fields[1],key);}
+  final String ip,hostId;final byte[] key;
+  Invite(String ip,byte[] key){this(ip,key,identity(key));}
+  Invite(String ip,byte[] key,String hostId){if(!privateIP(ip)||key.length!=32||!hostId.matches("[0-9a-f]{32}"))throw new IllegalArgumentException("Invalid invitation");this.ip=ip;this.key=key.clone();this.hostId=hostId;}
+  Invite at(String address){return new Invite(address,key,hostId);}
+  String encode(){return "LANREMOTE2:"+ip+":"+Base64.getUrlEncoder().withoutPadding().encodeToString(key)+":"+hostId;}
+  static Invite parse(String input){String[] fields=input.trim().split(":",-1);boolean old=fields.length==3&&fields[0].equals("LANREMOTE1"),modern=fields.length==4&&fields[0].equals("LANREMOTE2");if(!old&&!modern)throw new IllegalArgumentException("Invalid LANremote invitation.");byte[] key=Base64.getUrlDecoder().decode(fields[2]);return new Invite(fields[1],key,old?identity(key):fields[3]);}
  }
  static String identity(byte[] key){try{byte[] hash=java.security.MessageDigest.getInstance("SHA-256").digest(key);StringBuilder id=new StringBuilder();for(int i=0;i<16;i++)id.append(String.format(Locale.ROOT,"%02x",hash[i]&255));return id.toString();}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}}
  static boolean privateIP(String address){String[] p=address.split("\\.",-1);if(p.length!=4)return false;int[] n=new int[4];try{for(int i=0;i<4;i++){n[i]=Integer.parseInt(p[i]);if(n[i]<0||n[i]>255||!p[i].equals(Integer.toString(n[i])))return false;}}catch(NumberFormatException e){return false;}return n[0]==10||(n[0]==192&&n[1]==168)||(n[0]==172&&n[1]>=16&&n[1]<=31);}
@@ -27,7 +29,10 @@ final class RelayWire {
   if(data.length>MAX)throw new IOException("Message too large");byte[] nonce=random(12),sealed=crypt(true,key,challenge,direction,nonce,data);out.writeShort(sealed.length);out.write(nonce);out.write(sealed);out.flush();
  }
  static byte[] read(DataInputStream in,byte[] key,byte[] challenge,int direction)throws Exception{
-  int length=in.readUnsignedShort();if(length<16||length>MAX+16)throw new IOException("Invalid frame length");byte[] nonce=new byte[12],sealed=new byte[length];in.readFully(nonce);in.readFully(sealed);return crypt(false,key,challenge,direction,nonce,sealed);
+  return readFrame(in,key,challenge,direction,in.readUnsignedShort());
+ }
+ static byte[] readFrame(DataInputStream in,byte[] key,byte[] challenge,int direction,int length)throws Exception{
+  if(length<16||length>MAX+16)throw new IOException("Invalid frame length");byte[] nonce=new byte[12],sealed=new byte[length];in.readFully(nonce);in.readFully(sealed);return crypt(false,key,challenge,direction,nonce,sealed);
  }
  static byte[] key(int report,int usage){if(!allowed(report,usage))throw new IllegalArgumentException("Unsupported remote key.");return new byte[]{1,(byte)report,(byte)(usage>>8),(byte)usage};}
  static boolean allowed(int report,int usage){

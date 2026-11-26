@@ -11,6 +11,9 @@ public class RemoteService extends Service {
  private BluetoothHidDevice hid;
  private BluetoothDevice host;
  private RelayHost relay;
+ private RelayPermissions permissions(){return new RelayPermissions(this,lastAddress());}
+ private android.content.SharedPreferences remotePrefs(){return getSharedPreferences("remote",MODE_PRIVATE);}
+ private String sharePref(){return "share_"+lastAddress();}
  private RelayPairHost.Request pairingRequest;
  private static final int PAIR_NOTICE=2;
  private int connectAttempt;
@@ -62,7 +65,7 @@ public class RemoteService extends Service {
  public String nickname(BluetoothDevice d){return getSharedPreferences("remote",MODE_PRIVATE).getString("nickname_"+d.getAddress(),"");}
  public void nickname(BluetoothDevice d,String value){getSharedPreferences("remote",MODE_PRIVATE).edit().putString("nickname_"+d.getAddress(),value.trim()).apply();if(matches(d))message(ready()?"Connected: "+name(d):"Selected: "+name(d));}
  private void reject(BluetoothDevice d){try{if(hid!=null)hid.disconnect(d);}catch(RuntimeException ignored){}}
- private void accepted(BluetoothDevice d){if(!d.equals(host))clearQueue();host=d;connecting=false;switching=false;connectAttempt++;message("Connected: "+name(d));}
+ private void accepted(BluetoothDevice d){if(!d.equals(host))clearQueue();host=d;connecting=false;switching=false;connectAttempt++;message("Connected: "+name(d));if(relay==null&&remotePrefs().getBoolean(sharePref(),false))try{startRelay();}catch(Exception e){message("Connected • sharing paused: "+e.getMessage());}}
  private void reconcile(){if(hid==null)return;try{BluetoothDevice selected=null;for(BluetoothDevice d:hid.getConnectedDevices()){if(matches(d))selected=d;else if(!lastAddress().isEmpty())reject(d);}if(selected!=null)accepted(selected);else{host=null;if(lastAddress().isEmpty())message("Select your paired box in Bluetooth setup.");else reconnect();}}catch(RuntimeException e){message("Reconnect failed: "+e.getMessage());}}
  public void forgetTarget(){stopRelay();BluetoothDevice old=host;releaseOld();saveTarget("");clearQueue();host=null;connecting=false;switching=false;connectAttempt++;if(old!=null)reject(old);message("No target selected. Choose a paired device.");}
  private void releaseOld(){if(host!=null&&hid!=null&&sending){try{hid.sendReport(host,1,new byte[8]);hid.sendReport(host,2,new byte[2]);hid.sendReport(host,3,new byte[3]);}catch(RuntimeException ignored){}}}
@@ -106,11 +109,15 @@ public class RemoteService extends Service {
    if(hid.getConnectionState(d)!=BluetoothProfile.STATE_CONNECTING&&!hid.connect(d)){message("Connection request rejected. Select the phone on the TV box or retry.");return;}
    connecting=true;int token=++connectAttempt;message("Connecting to "+name(d)+"…");handler.postDelayed(()->{if(token==connectAttempt&&connecting&&!ready()){connecting=false;message("No Bluetooth HID connection yet. Select the phone on the box or retry.");}},12000);
   }catch(RuntimeException e){connecting=false;switching=false;message("Connect failed: "+e.getMessage());}}
- public String startRelay()throws Exception{if(!ready()||stopped)throw new IllegalStateException("Connect Bluetooth first.");if(relay==null){relay=new RelayHost(this,handler,this::receiveRelay,name(host),this::pairingChanged);message("Connected: "+name(host));}return relay.invitation();}
+ public String startRelay()throws Exception{if(!ready()||stopped)throw new IllegalStateException("Connect Bluetooth first.");if(relay==null){relay=new RelayHost(this,handler,this::receiveRelay,name(host),this::pairingChanged,permissions());remotePrefs().edit().putBoolean(sharePref(),true).apply();message("Connected: "+name(host));}return relay.invitation();}
  public RelayPairHost.Request pendingPairing(){return pairingRequest;}
  private void pairingChanged(RelayPairHost.Request request){if(request!=null&&(relay==null||!ready()||stopped)){request.decide(false);return;}pairingRequest=request;NotificationManager nm=getSystemService(NotificationManager.class);if(request==null)nm.cancel(PAIR_NOTICE);else{try{PendingIntent open=PendingIntent.getActivity(this,2,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);nm.notify(PAIR_NOTICE,new Notification.Builder(this,"relay_approval").setSmallIcon(android.R.drawable.stat_sys_data_bluetooth).setContentTitle("LANremote connection request").setContentText("Open LANremote to compare the code and approve.").setContentIntent(open).setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).build());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();}
  public void decidePairing(RelayPairHost.Request request,boolean yes){if(request!=null&&request==pairingRequest){request.decide(yes&&ready()&&relay!=null);pairingChanged(null);}}
- public void stopRelay(){if(relay!=null){relay.close();relay=null;pairingChanged(null);if(!stopped)message(ready()?"Connected: "+name(host):"Wi-Fi sharing stopped.");}}
+ public java.util.Map<String,String> approvedGuests(){return permissions().guests();}
+ public void revokeGuest(String id){permissions().revoke(id);}
+ public void revokeAllGuests(){pauseRelay();permissions().clear();remotePrefs().edit().putBoolean(sharePref(),false).apply();}
+ public void stopRelay(){remotePrefs().edit().putBoolean(sharePref(),false).apply();pauseRelay();}
+ private void pauseRelay(){if(relay!=null){relay.close();relay=null;pairingChanged(null);if(!stopped)message(ready()?"Connected: "+name(host):"Wi-Fi sharing stopped.");}}
  private byte receiveRelay(byte[] command){if(!ready()||stopped||relay==null)return 1;if(command.length==0)return 2;try{if(command[0]==0&&command.length==1)return 0;if(command[0]==1&&command.length==4){int report=command[1]&255,usage=((command[2]&255)<<8)|(command[3]&255);if(!RelayWire.allowed(report,usage)||queue.size()>=512)return 2;send(report,usage);return 0;}if(command[0]==2&&command.length<=501){sendText(new String(command,1,command.length-1,java.nio.charset.StandardCharsets.UTF_8));return 0;}}catch(RuntimeException ignored){}return 2;}
  private void clearQueue(){queue.clear();sending=false;sendGeneration++;}
  public void send(int report,int usage){if(!ready()||stopped)return;if(queue.size()>=512){message("Input queue full.");return;}queue.add(new KeyReport(report,HidKeys.report(report,usage)));pump();}
@@ -119,6 +126,6 @@ public class RemoteService extends Service {
   if(!proxy.sendReport(target,r.id,r.data)){clearQueue();message("Input report rejected. Reconnect the box.");return;}sending=true;
   handler.postDelayed(()->{if(generation!=sendGeneration||stopped||!target.equals(host))return;try{if(!proxy.sendReport(target,r.id,new byte[r.data.length])){clearQueue();message("Input release rejected. Reconnect the box.");return;}}catch(RuntimeException e){clearQueue();message("Input release failed: "+e.getMessage());return;}handler.postDelayed(()->{if(generation!=sendGeneration)return;sending=false;pump();},15);},35);
  }catch(RuntimeException e){clearQueue();message("Input failed: "+e.getMessage());}}
- public void shutdown(){if(stopped)return;stopped=true;stopRelay();releaseOld();clearQueue();connectAttempt++;switching=false;handler.removeCallbacksAndMessages(null);BluetoothHidDevice p=hid;hid=null;host=null;registered=false;requesting=false;connecting=false;sending=false;if(p!=null){try{p.unregisterApp();}catch(RuntimeException ignored){}try{adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE,p);}catch(RuntimeException ignored){}}message("Remote stopped. Tap Enable to start.");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
+ public void shutdown(){if(stopped)return;stopped=true;pauseRelay();releaseOld();clearQueue();connectAttempt++;switching=false;handler.removeCallbacksAndMessages(null);BluetoothHidDevice p=hid;hid=null;host=null;registered=false;requesting=false;connecting=false;sending=false;if(p!=null){try{p.unregisterApp();}catch(RuntimeException ignored){}try{adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE,p);}catch(RuntimeException ignored){}}message("Remote stopped. Tap Enable to start.");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
  @Override public void onDestroy(){shutdown();observer=null;super.onDestroy();}
 }

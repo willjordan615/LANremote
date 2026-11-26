@@ -16,10 +16,10 @@ final class RelayPairHost implements AutoCloseable {
   boolean await()throws InterruptedException{return latch.await(60,TimeUnit.SECONDS)&&approved;}
  }
  interface Observer{void changed(Request request);}
- private final RelayNetwork network;private final RelayWire.Invite invite;private final Handler main;private final Observer observer;private final ServerSocket server;
+ private final RelayPermissions permissions;private final RelayNetwork network;private final RelayWire.Invite invite;private final Handler main;private final Observer observer;private final ServerSocket server;
  private volatile boolean closed;private volatile Socket active;private volatile Request pending;
- RelayPairHost(RelayNetwork network,RelayWire.Invite invite,Handler main,Observer observer)throws Exception{
-  this.network=network;this.invite=invite;this.main=main;this.observer=observer;server=new ServerSocket();try{server.setReuseAddress(true);server.bind(new InetSocketAddress(network.local,RelayPairWire.PORT),1);}catch(Exception e){server.close();throw e;}
+ RelayPairHost(RelayNetwork network,RelayWire.Invite invite,Handler main,Observer observer,RelayPermissions permissions)throws Exception{
+  this.permissions=permissions;this.network=network;this.invite=invite;this.main=main;this.observer=observer;server=new ServerSocket();try{server.setReuseAddress(true);server.bind(new InetSocketAddress(network.local,RelayPairWire.PORT),1);}catch(Exception e){server.close();throw e;}
   new Thread(this::loop,"lanrelay-pair-host").start();
  }
  private void loop(){long last=0;while(!closed)try{Socket s=server.accept();long now=SystemClock.elapsedRealtime();if(!network.allows(s.getInetAddress())||now-last<5000){s.close();continue;}last=now;active=s;if(closed){s.close();break;}handle(s);active=null;}catch(IOException e){if(!closed)close();}}
@@ -31,7 +31,7 @@ final class RelayPairHost implements AutoCloseable {
   request=new Request(s.getInetAddress().getHostAddress(),RelayPairWire.code(key,transcript));pending=request;Request r=request;main.post(()->{if(!closed&&pending==r)observer.changed(r);});
   if(!r.await()||closed)return;
   socket.setSoTimeout(65000);byte[] consent=RelayWire.read(in,key,transcript,1);if(consent.length!=1||consent[0]!=1||closed)return;
-  RelayWire.write(out,key,transcript,2,invite.key);
+  byte[] credential=permissions.issue("Phone "+r.address+" • "+new java.text.SimpleDateFormat("MMM d HH:mm",java.util.Locale.getDefault()).format(new java.util.Date()));if(closed){permissions.revoke(RelayWire.identity(credential));return;}byte[] grant=new byte[64];System.arraycopy(credential,0,grant,0,32);System.arraycopy(invite.hostId.getBytes(java.nio.charset.StandardCharsets.US_ASCII),0,grant,32,32);try{RelayWire.write(out,key,transcript,2,grant);}catch(Exception e){permissions.revoke(RelayWire.identity(credential));throw e;}
  }catch(Exception ignored){}finally{if(key!=null)java.util.Arrays.fill(key,(byte)0);if(request!=null){request.decide(false);pending=null;main.post(()->{if(pending==null)observer.changed(null);});}}}
  @Override public void close(){closed=true;Request r=pending;if(r!=null)r.decide(false);try{server.close();}catch(IOException ignored){}Socket s=active;if(s!=null)try{s.close();}catch(IOException ignored){}}
 }

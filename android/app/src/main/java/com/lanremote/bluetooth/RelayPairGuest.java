@@ -20,8 +20,9 @@ final class RelayPairGuest implements AutoCloseable {
     byte[] transcript=RelayPairWire.transcript(commitment,hp,hn,gp,gn);key=RelayPairWire.derive(guest,hp,transcript);String code=RelayPairWire.code(key,transcript);
     main.post(()->{if(!closed)observer.compare(code);});if(!consent.await(60,TimeUnit.SECONDS)||!approved||closed)throw new IOException("Pairing cancelled or expired.");
     RelayWire.write(out,key,transcript,1,new byte[]{1});s.setSoTimeout(65000);byte[] invite=RelayWire.read(in,key,transcript,2);
-    if(invite.length!=32||!RelayWire.identity(invite).equals(found.id))throw new IOException("Host identity changed. Find hosts again.");
-    result=new RelayWire.Invite(found.ip,invite);
+    if(invite.length==32&&RelayWire.identity(invite).equals(found.id))result=new RelayWire.Invite(found.ip,invite);
+    else if(invite.length==64&&new String(invite,32,32,java.nio.charset.StandardCharsets.US_ASCII).equals(found.id))result=new RelayWire.Invite(found.ip,java.util.Arrays.copyOf(invite,32),found.id);
+    else throw new IOException("Host identity changed. Find hosts again.");
    }
   }catch(Exception e){error="Pairing not completed. Make sure both codes match and the host approves.";}finally{active=null;if(key!=null)java.util.Arrays.fill(key,(byte)0);}
   RelayWire.Invite done=result;String failure=error;main.post(()->{if(!closed)observer.finished(done,failure);});
