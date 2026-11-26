@@ -11,6 +11,8 @@ public class RemoteService extends Service {
  private BluetoothHidDevice hid;
  private BluetoothDevice host;
  private RelayHost relay;
+ private RelayPairHost.Request pairingRequest;
+ private static final int PAIR_NOTICE=2;
  private int connectAttempt;
  private boolean switching;
  private boolean registered, requesting, sending, stopped, connecting;
@@ -38,7 +40,7 @@ public class RemoteService extends Service {
  public class LocalBinder extends Binder { public RemoteService getService(){return RemoteService.this;} }
  @Override public IBinder onBind(Intent intent){return binder;}
  @Override public void onCreate(){super.onCreate();BluetoothManager m=getSystemService(BluetoothManager.class);adapter=m==null?null:m.getAdapter();
-  NotificationManager nm=getSystemService(NotificationManager.class);nm.createNotificationChannel(new NotificationChannel(CHANNEL,"Bluetooth remote",NotificationManager.IMPORTANCE_LOW));
+  NotificationManager nm=getSystemService(NotificationManager.class);nm.createNotificationChannel(new NotificationChannel(CHANNEL,"Bluetooth remote",NotificationManager.IMPORTANCE_LOW));nm.createNotificationChannel(new NotificationChannel("relay_approval","Wi-Fi remote approvals",NotificationManager.IMPORTANCE_HIGH));
  }
  @Override public int onStartCommand(Intent intent,int flags,int startId){
   if(intent!=null&&STOP.equals(intent.getAction())){shutdown();return START_NOT_STICKY;}
@@ -104,8 +106,11 @@ public class RemoteService extends Service {
    if(hid.getConnectionState(d)!=BluetoothProfile.STATE_CONNECTING&&!hid.connect(d)){message("Connection request rejected. Select the phone on the TV box or retry.");return;}
    connecting=true;int token=++connectAttempt;message("Connecting to "+name(d)+"…");handler.postDelayed(()->{if(token==connectAttempt&&connecting&&!ready()){connecting=false;message("No Bluetooth HID connection yet. Select the phone on the box or retry.");}},12000);
   }catch(RuntimeException e){connecting=false;switching=false;message("Connect failed: "+e.getMessage());}}
- public String startRelay()throws Exception{if(!ready()||stopped)throw new IllegalStateException("Connect Bluetooth first.");if(relay==null){relay=new RelayHost(this,handler,this::receiveRelay,name(host));message("Connected: "+name(host));}return relay.invitation();}
- public void stopRelay(){if(relay!=null){relay.close();relay=null;if(!stopped)message(ready()?"Connected: "+name(host):"Wi-Fi sharing stopped.");}}
+ public String startRelay()throws Exception{if(!ready()||stopped)throw new IllegalStateException("Connect Bluetooth first.");if(relay==null){relay=new RelayHost(this,handler,this::receiveRelay,name(host),this::pairingChanged);message("Connected: "+name(host));}return relay.invitation();}
+ public RelayPairHost.Request pendingPairing(){return pairingRequest;}
+ private void pairingChanged(RelayPairHost.Request request){if(request!=null&&(relay==null||!ready()||stopped)){request.decide(false);return;}pairingRequest=request;NotificationManager nm=getSystemService(NotificationManager.class);if(request==null)nm.cancel(PAIR_NOTICE);else{try{PendingIntent open=PendingIntent.getActivity(this,2,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);nm.notify(PAIR_NOTICE,new Notification.Builder(this,"relay_approval").setSmallIcon(android.R.drawable.stat_sys_data_bluetooth).setContentTitle("LANremote connection request").setContentText("Open LANremote to compare the code and approve.").setContentIntent(open).setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).build());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();}
+ public void decidePairing(RelayPairHost.Request request,boolean yes){if(request!=null&&request==pairingRequest){request.decide(yes&&ready()&&relay!=null);pairingChanged(null);}}
+ public void stopRelay(){if(relay!=null){relay.close();relay=null;pairingChanged(null);if(!stopped)message(ready()?"Connected: "+name(host):"Wi-Fi sharing stopped.");}}
  private byte receiveRelay(byte[] command){if(!ready()||stopped||relay==null)return 1;if(command.length==0)return 2;try{if(command[0]==0&&command.length==1)return 0;if(command[0]==1&&command.length==4){int report=command[1]&255,usage=((command[2]&255)<<8)|(command[3]&255);if(!RelayWire.allowed(report,usage)||queue.size()>=512)return 2;send(report,usage);return 0;}if(command[0]==2&&command.length<=501){sendText(new String(command,1,command.length-1,java.nio.charset.StandardCharsets.UTF_8));return 0;}}catch(RuntimeException ignored){}return 2;}
  private void clearQueue(){queue.clear();sending=false;sendGeneration++;}
  public void send(int report,int usage){if(!ready()||stopped)return;if(queue.size()>=512){message("Input queue full.");return;}queue.add(new KeyReport(report,HidKeys.report(report,usage)));pump();}

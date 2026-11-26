@@ -34,6 +34,8 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.HostIdentityTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RelayWire.java android/tests/RelayWireTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RelayWireTest
+          javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RelayPairWire.java android/tests/RelayPairWireTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RelayPairWireTest
       - run: gradle -p android :app:assembleDebug
       - name: Prepare signed APK
         env:
