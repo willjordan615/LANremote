@@ -54,3 +54,6 @@ Both modes now use the same actual controls and group spacing. The selected mode
 
 ## Native dark theme (0.4.8)
 Always-dark native Android theme: charcoal background, rounded low-elevation controls, neutral monochrome palette, explicit selected and disabled states, dark app dialogs and system bars. Shared layout and remote protocols unchanged; no extra dependencies. System keyboard and Android installer retain their own themes. Physical visual verification pending.
+
+## Portable setup (0.4.9)
+Bluetooth targets are explicitly selected by bonded address, not device name. Known TV/computer classes are prioritized (heuristic only); all paired devices remain available. A saved target is never overwritten by an incoming connection; unselected hosts receive no input. Existing last-host settings migrate as the initial selection. Nicknames are local; Forget target does not unpair Android devices. LG setup no longer defaults to a household address. Find LG TVs sends the standard webOS SSDP search over local Wi-Fi and presents matching response addresses for explicit selection; pairing and certificate approval are unchanged. TV must be on, discovery can fail on isolated Wi-Fi, and manual IP remains supported. No discovery information leaves the local network. Hardware testing needed for multiple Bluetooth hosts and LG discovery.

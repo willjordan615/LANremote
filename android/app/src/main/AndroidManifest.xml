@@ -8,6 +8,7 @@
  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
  <uses-permission android:name="android.permission.INTERNET"/>
+ <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
  <application android:label="LAN Remote Bluetooth" android:theme="@style/LanRemoteTheme" android:allowBackup="false" android:usesCleartextTraffic="true">
   <service android:name=".RemoteService" android:exported="false" android:foregroundServiceType="connectedDevice"/>

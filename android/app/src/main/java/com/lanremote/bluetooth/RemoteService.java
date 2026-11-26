@@ -10,6 +10,8 @@ public class RemoteService extends Service {
  private BluetoothAdapter adapter;
  private BluetoothHidDevice hid;
  private BluetoothDevice host;
+ private int connectAttempt;
+ private boolean switching;
  private boolean registered, requesting, sending, stopped, connecting;
  private final ArrayDeque<KeyReport> queue=new ArrayDeque<>();
  private static final class KeyReport {final int id;final byte[] data;KeyReport(int id,byte[] data){this.id=id;this.data=data;}}
@@ -49,10 +51,19 @@ public class RemoteService extends Service {
  private void message(String text){status=text;if(!stopped){try{getSystemService(NotificationManager.class).notify(1,notification());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();}
  public void observe(Runnable value){observer=value;if(value!=null)value.run();}
  public String status(){return status;}
- public boolean ready(){return host!=null&&registered;}
+ public boolean ready(){return host!=null&&registered&&matches(host);}
  public boolean registered(){return registered;}
- public String lastAddress(){return getSharedPreferences("remote",MODE_PRIVATE).getString("lastHost","");}
- private void remember(BluetoothDevice d){getSharedPreferences("remote",MODE_PRIVATE).edit().putString("lastHost",d.getAddress()).apply();}
+ public String lastAddress(){android.content.SharedPreferences p=getSharedPreferences("remote",MODE_PRIVATE);return HostIdentity.initial(p.getString("selectedHost",null),p.getString("lastHost",""));}
+ private boolean matches(BluetoothDevice d){return d!=null&&HostIdentity.matches(lastAddress(),d.getAddress());}
+ private void saveTarget(String address){getSharedPreferences("remote",MODE_PRIVATE).edit().putString("selectedHost",address).remove("lastHost").apply();}
+ public String nickname(BluetoothDevice d){return getSharedPreferences("remote",MODE_PRIVATE).getString("nickname_"+d.getAddress(),"");}
+ public void nickname(BluetoothDevice d,String value){getSharedPreferences("remote",MODE_PRIVATE).edit().putString("nickname_"+d.getAddress(),value.trim()).apply();if(matches(d))message(ready()?"Connected: "+name(d):"Selected: "+name(d));}
+ private void reject(BluetoothDevice d){try{if(hid!=null)hid.disconnect(d);}catch(RuntimeException ignored){}}
+ private void accepted(BluetoothDevice d){if(!d.equals(host))clearQueue();host=d;connecting=false;switching=false;connectAttempt++;message("Connected: "+name(d));}
+ private void reconcile(){if(hid==null)return;try{BluetoothDevice selected=null;for(BluetoothDevice d:hid.getConnectedDevices()){if(matches(d))selected=d;else if(!lastAddress().isEmpty())reject(d);}if(selected!=null)accepted(selected);else{host=null;if(lastAddress().isEmpty())message("Select your paired box in Bluetooth setup.");else reconnect();}}catch(RuntimeException e){message("Reconnect failed: "+e.getMessage());}}
+ public void forgetTarget(){BluetoothDevice old=host;releaseOld();saveTarget("");clearQueue();host=null;connecting=false;switching=false;connectAttempt++;if(old!=null)reject(old);message("No target selected. Choose a paired device.");}
+ private void releaseOld(){if(host!=null&&hid!=null&&sending){try{hid.sendReport(host,1,new byte[8]);hid.sendReport(host,2,new byte[2]);hid.sendReport(host,3,new byte[3]);}catch(RuntimeException ignored){}}}
+
  public void enable(){if(stopped||requesting||registered)return;if(adapter==null||!adapter.isEnabled()){message("Bluetooth unavailable or disabled.");return;}
   requesting=true;message("Requesting HID device profile…");
   try{if(hid!=null)register();else if(!adapter.getProfileProxy(this,listener,BluetoothProfile.HID_DEVICE)){requesting=false;message("Bluetooth HID profile unavailable.");}}
@@ -61,21 +72,37 @@ public class RemoteService extends Service {
  }
  private final BluetoothProfile.ServiceListener listener=new BluetoothProfile.ServiceListener(){
   @Override public void onServiceConnected(int p,BluetoothProfile proxy){handler.post(()->{if(stopped){adapter.closeProfileProxy(p,proxy);return;}hid=(BluetoothHidDevice)proxy;register();});}
-  @Override public void onServiceDisconnected(int p){handler.post(()->{clearQueue();hid=null;host=null;registered=false;requesting=false;connecting=false;message("HID profile disconnected. Return to the remote to retry.");});}
+  @Override public void onServiceDisconnected(int p){handler.post(()->{clearQueue();connectAttempt++;switching=false;hid=null;host=null;registered=false;requesting=false;connecting=false;message("HID profile disconnected. Return to the remote to retry.");});}
  };
  private void register(){if(stopped||registered||hid==null)return;try{
   BluetoothHidDeviceAppSdpSettings sdp=new BluetoothHidDeviceAppSdpSettings("LAN Remote","Bluetooth keyboard and mouse remote","LAN Remote",BluetoothHidDevice.SUBCLASS1_COMBO,DESC);
   if(!hid.registerApp(sdp,null,null,getMainExecutor(),callback)){requesting=false;message("HID registration rejected. Tap Enable to retry.");}
  }catch(RuntimeException e){requesting=false;message("HID registration failed: "+e.getMessage());}}
  private final BluetoothHidDevice.Callback callback=new BluetoothHidDevice.Callback(){
-  @Override public void onAppStatusChanged(BluetoothDevice plugged,boolean ok){if(stopped)return;registered=ok;requesting=false;connecting=false;if(!ok){clearQueue();host=null;}message(ok?"Remote registered. Pair or reconnect.":"Android ended HID registration. Return to the remote to retry.");if(ok){try{List<BluetoothDevice> connected=hid.getConnectedDevices();if(!connected.isEmpty()){host=connected.get(0);remember(host);message("Connected: "+name(host));}else reconnect();}catch(RuntimeException e){message("Reconnect failed: "+e.getMessage());}}}
-  @Override public void onConnectionStateChanged(BluetoothDevice d,int state){if(stopped)return;if(state==BluetoothProfile.STATE_CONNECTED){if(!d.equals(host))clearQueue();host=d;connecting=false;remember(d);message("Connected: "+name(d));}else if(state==BluetoothProfile.STATE_CONNECTING){connecting=true;message("Connecting to "+name(d)+"…");}else if(state==BluetoothProfile.STATE_DISCONNECTED){if(d.equals(host)){clearQueue();host=null;}connecting=false;message(host==null?"Disconnected from "+name(d)+". Return to reconnect.":"Connected: "+name(host));}}
-  @Override public void onGetReport(BluetoothDevice d,byte type,byte id,int size){if(stopped||hid==null)return;int n=id==1?8:id==2?2:id==3?3:0;if(n>0&&type==BluetoothHidDevice.REPORT_TYPE_INPUT)hid.replyReport(d,type,id,new byte[n]);else hid.reportError(d,BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID);}
+  @Override public void onAppStatusChanged(BluetoothDevice plugged,boolean ok){if(stopped)return;registered=ok;requesting=false;connecting=false;switching=false;connectAttempt++;if(!ok){clearQueue();host=null;message("Android ended HID registration. Return to the remote to retry.");return;}reconcile();}
+  @Override public void onConnectionStateChanged(BluetoothDevice d,int state){if(stopped)return;
+   if(state==BluetoothProfile.STATE_CONNECTED){if(matches(d)){accepted(d);}else if(lastAddress().isEmpty()){message("Paired with "+name(d)+". Select it in Bluetooth setup to enable controls.");}else{reject(d);}}
+   else if(state==BluetoothProfile.STATE_CONNECTING&&matches(d)){connecting=true;message("Connecting to "+name(d)+"…");}
+   else if(state==BluetoothProfile.STATE_DISCONNECTED){if(d.equals(host)){clearQueue();host=null;}if(switching){switching=false;connecting=false;reconnect();}else if(matches(d)){connecting=false;connectAttempt++;message("Disconnected from "+name(d)+". Return to reconnect.");}}
+  }
+  @Override public void onGetReport(BluetoothDevice d,byte type,byte id,int size){if(stopped||hid==null||!matches(d))return;int n=id==1?8:id==2?2:id==3?3:0;if(n>0&&type==BluetoothHidDevice.REPORT_TYPE_INPUT)hid.replyReport(d,type,id,new byte[n]);else hid.reportError(d,BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID);}
  };
- public String name(BluetoothDevice d){try{String n=d.getName();return n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
+ public String name(BluetoothDevice d){try{String n=d.getName();String nick=nickname(d);return !nick.isEmpty()?nick:n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  public void resumeRemote(){if(stopped)return;if(!registered){enable();return;}reconnect();}
- private void reconnect(){if(stopped||!registered||hid==null||host!=null||connecting)return;String address=lastAddress();if(address.isEmpty())return;try{for(BluetoothDevice d:adapter.getBondedDevices())if(address.equals(d.getAddress())){connect(d);return;}message("Previously connected device is no longer paired.");}catch(RuntimeException e){message("Reconnect failed: "+e.getMessage());}}
- public void connect(BluetoothDevice d){if(stopped||!registered||hid==null){message("Enable Bluetooth remote first.");return;}if(d.equals(host)){message("Connected: "+name(d));return;}try{if(!hid.connect(d)){connecting=false;message("Connection request rejected. Try pairing from the TV box.");return;}connecting=true;message("Connecting to "+name(d)+"…");handler.postDelayed(()->{if(connecting&&host==null){connecting=false;message("No Bluetooth HID connection yet. Try selecting the phone on the TV.");}},12000);}catch(RuntimeException e){connecting=false;message("Connect failed: "+e.getMessage());}}
+ private void reconnect(){if(stopped||!registered||hid==null||ready()||connecting||switching)return;String address=lastAddress();if(address.isEmpty())return;try{for(BluetoothDevice d:adapter.getBondedDevices())if(matches(d)){connectTarget(d);return;}message("Selected device is no longer paired. Choose another in setup.");}catch(RuntimeException e){message("Reconnect failed: "+e.getMessage());}}
+ public void connect(BluetoothDevice d){if(stopped||!registered||hid==null){message("Enable Bluetooth remote first.");return;}if(d.getBondState()!=BluetoothDevice.BOND_BONDED){message("Pair this device first.");return;}
+  if(!matches(d)){releaseOld();clearQueue();host=null;connecting=false;switching=false;connectAttempt++;saveTarget(d.getAddress());}
+  connectTarget(d);
+ }
+ private void connectTarget(BluetoothDevice d){if(!matches(d)||stopped||!registered||hid==null)return;try{
+   if(hid.getConnectionState(d)==BluetoothProfile.STATE_CONNECTED){for(BluetoothDevice other:hid.getConnectedDevices())if(!matches(other))reject(other);accepted(d);return;}
+   if(connecting||switching)return;
+   List<BluetoothDevice> others=hid.getDevicesMatchingConnectionStates(new int[]{BluetoothProfile.STATE_CONNECTED,BluetoothProfile.STATE_CONNECTING,BluetoothProfile.STATE_DISCONNECTING});
+   boolean waiting=false;for(BluetoothDevice other:others)if(!matches(other)){waiting=true;reject(other);}
+   if(waiting){switching=true;int token=++connectAttempt;message("Switching to "+name(d)+"…");handler.postDelayed(()->{if(token==connectAttempt&&switching){switching=false;message("Previous host still connected. Tap Connect to retry.");}},6000);return;}
+   if(hid.getConnectionState(d)!=BluetoothProfile.STATE_CONNECTING&&!hid.connect(d)){message("Connection request rejected. Select the phone on the TV box or retry.");return;}
+   connecting=true;int token=++connectAttempt;message("Connecting to "+name(d)+"…");handler.postDelayed(()->{if(token==connectAttempt&&connecting&&!ready()){connecting=false;message("No Bluetooth HID connection yet. Select the phone on the box or retry.");}},12000);
+  }catch(RuntimeException e){connecting=false;switching=false;message("Connect failed: "+e.getMessage());}}
  private void clearQueue(){queue.clear();sending=false;sendGeneration++;}
  public void send(int report,int usage){if(!ready()||stopped)return;if(queue.size()>=512){message("Input queue full.");return;}queue.add(new KeyReport(report,HidKeys.report(report,usage)));pump();}
  public void sendText(String text){if(!ready()||stopped)throw new IllegalStateException("Connect the vSeeBox first.");List<byte[]> reports=HidKeys.text(text);if(queue.size()+reports.size()>512)throw new IllegalStateException("Wait for the current text to finish.");for(byte[] data:reports)queue.add(new KeyReport(1,data));pump();}
@@ -83,6 +110,6 @@ public class RemoteService extends Service {
   if(!proxy.sendReport(target,r.id,r.data)){clearQueue();message("Input report rejected. Reconnect the box.");return;}sending=true;
   handler.postDelayed(()->{if(generation!=sendGeneration||stopped||!target.equals(host))return;try{if(!proxy.sendReport(target,r.id,new byte[r.data.length])){clearQueue();message("Input release rejected. Reconnect the box.");return;}}catch(RuntimeException e){clearQueue();message("Input release failed: "+e.getMessage());return;}handler.postDelayed(()->{if(generation!=sendGeneration)return;sending=false;pump();},15);},35);
  }catch(RuntimeException e){clearQueue();message("Input failed: "+e.getMessage());}}
- public void shutdown(){if(stopped)return;stopped=true;clearQueue();handler.removeCallbacksAndMessages(null);BluetoothHidDevice p=hid;hid=null;host=null;registered=false;requesting=false;connecting=false;sending=false;if(p!=null){try{p.unregisterApp();}catch(RuntimeException ignored){}try{adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE,p);}catch(RuntimeException ignored){}}message("Remote stopped. Tap Enable to start.");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
+ public void shutdown(){if(stopped)return;stopped=true;releaseOld();clearQueue();connectAttempt++;switching=false;handler.removeCallbacksAndMessages(null);BluetoothHidDevice p=hid;hid=null;host=null;registered=false;requesting=false;connecting=false;sending=false;if(p!=null){try{p.unregisterApp();}catch(RuntimeException ignored){}try{adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE,p);}catch(RuntimeException ignored){}}message("Remote stopped. Tap Enable to start.");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
  @Override public void onDestroy(){shutdown();observer=null;super.onDestroy();}
 }
