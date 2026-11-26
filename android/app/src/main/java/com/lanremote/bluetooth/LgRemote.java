@@ -30,6 +30,11 @@ final class LgRemote {
  private String pendingSettings="", pictureRequest="";
  private final EditText mac;
  private final TextView wakeStatus;
+ private WakeDiagnostic wakeDiagnostic;
+ private int wakeRun;
+ private String wakeSummary="",wakeReport="";
+ private AlertDialog wakeDialog;
+ private TextView wakeReportView;
  private final LinearLayout wakeAdvanced;
  private String wakeInfoRequest="",wakeStateRequest="",wiredMac="",wifiMac="",wiredIp="",wifiIp="",wiredState="",wifiState="";
  private boolean wakeInfoDone,wakeStateDone;
@@ -55,6 +60,7 @@ final class LgRemote {
   wakeStatus=new TextView(a);wakeStatus.setTextSize(13);RemoteTheme.secondary(wakeStatus);setup.addView(wakeStatus);
   setup.addView(action("Set up TV power on",()->{if(paired&&address.equals(ip.getText().toString().trim()))learnWakeAddress();else connect();}));
   wakeAdvanced=new LinearLayout(a);wakeAdvanced.setOrientation(LinearLayout.VERTICAL);wakeAdvanced.setVisibility(View.GONE);
+  setup.addView(action("Power-on diagnostics",()->showWakeReport()));
   setup.addView(action("Manual power-on setup",()->wakeAdvanced.setVisibility(wakeAdvanced.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE)));
   mac=new EditText(a);mac.setSingleLine(true);mac.setHint("TV MAC address (for power on)");mac.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);mac.setText(prefs.getString("wake_mac_"+ip.getText().toString().trim(),""));wakeAdvanced.addView(mac);
   wakeAdvanced.addView(action("Save TV wake address",()->saveMac()));setup.addView(wakeAdvanced);
@@ -68,7 +74,7 @@ final class LgRemote {
   rowIn(setup,command("Backspace",()->request("com.webos.service.ime/deleteCharacters",obj("count",1))),command("Enter",()->request("com.webos.service.ime/sendEnterKey",obj())));
   panel.addView(setupToggle,new LinearLayout.LayoutParams(-1,dp(48)));panel.addView(setup);
   ArrayAdapter<String> empty=new ArrayAdapter<>(a,android.R.layout.simple_spinner_dropdown_item,Collections.singletonList("HDMI / external inputs"));inputs.setAdapter(empty);
-  refreshWakeStatus();ip.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence t,int start,int count,int after){}public void onTextChanged(CharSequence t,int start,int before,int count){mac.setText(prefs.getString("wake_mac_"+t.toString().trim(),""));refreshWakeStatus();}public void afterTextChanged(android.text.Editable e){}});
+  refreshWakeStatus();ip.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence t,int start,int count,int after){}public void onTextChanged(CharSequence t,int start,int before,int count){cancelWake();wakeSummary=wakeReport="";mac.setText(prefs.getString("wake_mac_"+t.toString().trim(),""));refreshWakeStatus();}public void afterTextChanged(android.text.Editable e){}});
   message("Open TV setup to connect.");
 
  }
@@ -90,7 +96,7 @@ final class LgRemote {
  private void message(String s){status.setText(s);if(mirrorStatus!=null)mirrorStatus.setText("TV: "+s);for(Button b:buttons)b.setEnabled(paired);if(observer!=null)observer.run();}
  private void discover(){if(discovering||disposed)return;discovering=true;message("Looking for LG TVs on local Wi-Fi…");new Thread(()->{try{Map<String,String> found=LgDiscovery.find(activity.getApplicationContext());main.post(()->{discovering=false;if(disposed||activity.isFinishing()||activity.isDestroyed())return;if(found.isEmpty()){message("No LG TVs advertised. Turn on the TV or enter its IP manually.");return;}ArrayList<String> addresses=new ArrayList<>(found.keySet());String[] labels=new String[addresses.size()];for(int i=0;i<labels.length;i++)labels[i]=found.get(addresses.get(i))+"\n"+addresses.get(i);message("Found "+addresses.size()+" possible LG TV(s). Choose yours.");new AlertDialog.Builder(activity).setTitle("Select your LG TV").setItems(labels,(dialog,i)->{String selected=addresses.get(i);if(!selected.equals(address))disconnect("TV selected. Connect / pair to confirm.");ip.setText(selected);mac.setText(prefs.getString("wake_mac_"+selected,""));message("Selected "+selected+". Tap Connect / pair.");}).setNegativeButton("Cancel",null).show();});}catch(Exception e){main.post(()->{discovering=false;if(!disposed)message("TV discovery failed: "+e.getMessage());});}},"lg-discovery").start();}
  private boolean validMac(String value){return !WakeAddress.normalize(value).isEmpty();}
- private void refreshWakeStatus(){String target=ip.getText().toString().trim();wakeStatus.setText(validMac(prefs.getString("wake_mac_"+target,""))?"Power on: wake address saved. Enable mobile TV power-on and test.":"Power on: turn the TV on and connect to set up automatically.");}
+ private void refreshWakeStatus(){String target=ip.getText().toString().trim();if(wakeDiagnostic!=null){wakeStatus.setText(wakeSummary);return;}wakeStatus.setText(validMac(prefs.getString("wake_mac_"+target,""))?"Power on: wake address saved. Enable mobile TV power-on and test.":"Power on: turn the TV on and connect to set up automatically.");}
  private boolean saveMac(){String target=ip.getText().toString().trim(),value=WakeAddress.normalize(mac.getText().toString());if(!privateIP(target)||value.isEmpty()){message("Enter the TV IP and a valid network MAC address in manual setup.");return false;}prefs.edit().putString("wake_mac_"+target,value).putBoolean("wake_manual_"+target,true).apply();mac.setText(value);refreshWakeStatus();message("TV wake address saved.");return true;}
  private void learnWakeAddress(){if(!paired||!address.equals(ip.getText().toString().trim()))return;
   wiredMac=wifiMac=wiredIp=wifiIp=wiredState=wifiState="";wakeInfoDone=wakeStateDone=false;
@@ -127,11 +133,20 @@ final class LgRemote {
   if(pictureRequest.isEmpty()){quickSettings();return;}
   String id=pictureRequest;int g=generation;main.postDelayed(()->{if(current(g)&&id.equals(pictureRequest)){pictureRequest="";quickSettings();}},4000);
  }
- private void wake(){String target=ip.getText().toString().trim();String value=prefs.getString("wake_mac_"+target,"");if(!privateIP(target)||!validMac(value)){message("Set up TV power on while the TV is awake.");new AlertDialog.Builder(activity).setTitle("Set up TV power on").setMessage("Turn the TV on once using its usual remote. Enable Turn on via Wi-Fi in TV settings, then connect LANremote so it can learn the wake address.").setPositiveButton("Connect / set up",(d,w)->{if(paired)learnWakeAddress();else connect();}).setNegativeButton("Cancel",null).show();return;}message("Sending TV wake request…");
-  new Thread(()->{try{byte[] packet=new byte[102];Arrays.fill(packet,0,6,(byte)255);String[] parts=value.split("[:-]");for(int j=0;j<16;j++)for(int i=0;i<6;i++)packet[6+j*6+i]=(byte)Integer.parseInt(parts[i],16);
-   InetAddress tv=InetAddress.getByName(target),broadcast=null,source=null;Enumeration<NetworkInterface> nets=NetworkInterface.getNetworkInterfaces();while(nets.hasMoreElements()){NetworkInterface n=nets.nextElement();if(!n.isUp()||n.isLoopback())continue;for(InterfaceAddress ia:n.getInterfaceAddresses()){if(!(ia.getAddress() instanceof Inet4Address)||ia.getBroadcast()==null)continue;int bits=ia.getNetworkPrefixLength();if(bits<1||bits>30)continue;byte[] x=ia.getAddress().getAddress(),y=tv.getAddress();boolean same=true;for(int k=0;k<bits;k++)if(((x[k/8]>>(7-k%8))&1)!=((y[k/8]>>(7-k%8))&1)){same=false;break;}if(same){broadcast=ia.getBroadcast();source=ia.getAddress();break;}}if(broadcast!=null)break;}
-   if(broadcast==null)throw new IOException("Phone and TV must be on the same local subnet.");try(DatagramSocket sock=new DatagramSocket(new InetSocketAddress(source,0))){sock.setBroadcast(true);for(int i=0;i<3;i++){sock.send(new DatagramPacket(packet,packet.length,broadcast,9));Thread.sleep(120);}}main.post(()->{if(!disposed)message("Wake request sent; allow the TV time to start. Power-on is not confirmed.");});
-  }catch(Exception e){main.post(()->{if(!disposed)message("TV wake failed: "+e.getMessage());});}},"lg-wake").start();
+ private void cancelWake(){wakeRun++;if(wakeDiagnostic!=null){wakeDiagnostic.close();wakeDiagnostic=null;}if(wakeDialog!=null){wakeDialog.dismiss();wakeDialog=null;wakeReportView=null;}}
+ private String lastWakeReport(){return wakeReport.isEmpty()?prefs.getString("wake_report_"+ip.getText().toString().trim(),"No power-on test yet. Turn the TV off, then choose Power on or Run test."):wakeReport;}
+ private void showWakeReport(){if(wakeDialog!=null&&wakeDialog.isShowing())return;ScrollView scroll=new ScrollView(activity);wakeReportView=new TextView(activity);wakeReportView.setTextSize(14);wakeReportView.setPadding(dp(20),dp(12),dp(20),dp(12));wakeReportView.setText(lastWakeReport());scroll.addView(wakeReportView);
+  wakeDialog=new AlertDialog.Builder(activity).setTitle("TV power-on diagnostics").setView(scroll).setPositiveButton("Close",null).setNeutralButton("Copy report",(d,w)->{android.content.ClipboardManager clipboard=activity.getSystemService(android.content.ClipboardManager.class);clipboard.setPrimaryClip(ClipData.newPlainText("TV power-on diagnostic",lastWakeReport()));}).setNegativeButton("Run test",(d,w)->wake()).create();
+  wakeDialog.setOnDismissListener(d->{if(wakeDialog==d){wakeDialog=null;wakeReportView=null;}});wakeDialog.show();
+ }
+ private void wake(){if(disposed)return;if(wakeDiagnostic!=null){showWakeReport();return;}
+  String target=ip.getText().toString().trim(),value=WakeAddress.normalize(prefs.getString("wake_mac_"+target,""));
+  String source=prefs.getBoolean("wake_manual_"+target,false)?"manual":"saved / automatic";
+  int token=++wakeRun;wakeSummary="Power on: checking wake address…";wakeReport=wakeSummary;wakeStatus.setText(wakeSummary);message(wakeSummary);
+  wakeDiagnostic=new WakeDiagnostic(activity,target,value,source,legacy.isChecked()?3000:3001,(summary,report,done)->main.post(()->{if(disposed||token!=wakeRun||!target.equals(ip.getText().toString().trim()))return;
+   wakeSummary=summary;wakeReport=report;wakeStatus.setText(summary);message(summary);if(wakeReportView!=null)wakeReportView.setText(report);
+   if(done){wakeDiagnostic=null;prefs.edit().putString("wake_report_"+target,report).apply();}
+  }));wakeDiagnostic.start();showWakeReport();
  }
  private static boolean privateIP(String s){String[] parts=s.split("\\.",-1);if(parts.length!=4)return false;int[] p=new int[4];try{for(int i=0;i<4;i++){if(!parts[i].matches("[0-9]{1,3}"))return false;p[i]=Integer.parseInt(parts[i]);if(p[i]>255||!parts[i].equals(Integer.toString(p[i])))return false;}}catch(Exception e){return false;}return p[0]==10||(p[0]==192&&p[1]==168)||(p[0]==172&&p[1]>=16&&p[1]<=31);}
  private boolean current(int g){return !disposed&&g==generation;}
@@ -168,5 +183,5 @@ final class LgRemote {
  private void loadInputs(){inputRequest=request("tv/getExternalInputList",null);}
  private void switchInput(){int i=inputs.getSelectedItemPosition();if(i<0||i>=inputIds.size()){message("Refresh inputs first.");return;}request("tv/switchInput",obj("inputId",inputIds.get(i)));}
  private void disconnect(String why){pendingInput="";pendingOff=false;pendingSettings="";pictureRequest="";wakeInfoRequest=wakeStateRequest="";generation++;paired=false;connecting=false;pointerReady=false;if(pointer!=null)pointer.cancel();if(control!=null)control.cancel();pointer=null;control=null;if(client!=null){client.dispatcher().executorService().shutdown();client.connectionPool().evictAll();client=null;}message(why);}
- void destroy(){disposed=true;disconnect("Disconnected.");main.removeCallbacksAndMessages(null);}
+ void destroy(){disposed=true;cancelWake();disconnect("Disconnected.");main.removeCallbacksAndMessages(null);}
 }

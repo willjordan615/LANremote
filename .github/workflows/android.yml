@@ -38,6 +38,8 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RelayPairWireTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/WakeAddress.java android/tests/WakeAddressTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.WakeAddressTest
+          javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/WakePacket.java android/tests/WakePacketTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.WakePacketTest
       - run: gradle -p android :app:assembleDebug
       - name: Prepare signed APK
         env:
