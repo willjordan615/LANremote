@@ -29,7 +29,7 @@ final class AppUpdates {
  private boolean alive(){return !activity.isFinishing()&&!activity.isDestroyed();}
  void check(boolean manual){
   if(checking)return;
-  if(prefs.getLong("download",-1)>=0){if(manual)installOrStatus();else show("Update download saved. Tap Check / install update.");return;}
+  if(prefs.getLong("download",-1)>=0){try{if(prefs.getLong("version",-1)<=version())clear(prefs.getLong("download",-1));}catch(Exception e){show("Update state: "+e.getMessage());return;}if(prefs.getLong("download",-1)>=0){if(manual)installOrStatus();else show("Update download saved. Tap Check / install update.");return;}}
   checking=true;show("Checking GitHub for updates…");
   new Thread(()->{
    HttpURLConnection c=null;
