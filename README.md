@@ -39,3 +39,6 @@ Back restores the original Escape keyboard report; Right click separately sends 
 
 ## Quick TV controls (0.4.3)
 Both modes have HDMI 1–3 and explicit LG TV power on/off choices. HDMI and power-off use the TV's paired Wi-Fi control session, connecting if needed; Bluetooth is unchanged. Wake-on-LAN requires the TV's active network adapter MAC address saved under LG TV setup, supported networked standby enabled, and a phone on the same subnet. Wake packet transmission is not proof that the TV starts. Backspace, Space, and Tab remain in the vSeeBox keyboard dialog under Keys. Setup moved below the main controls. Hardware testing required.
+
+## Compact icon controls (0.4.4)
+The header has a shared TV power icon for both modes. vSeeBox mouse buttons share a rounded two-part control with an inset divider and independent left/right click actions. Both modes use scalable drawn keyboard icons with accessibility labels. TV and Bluetooth status remain near the top. Protocol behavior is unchanged.

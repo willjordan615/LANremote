@@ -30,10 +30,13 @@ public class MainActivity extends Activity {
   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(10),dp(6),dp(10),dp(6));scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
-  TextView title=new TextView(this);title.setText("LAN Remote • 0.4.3");title.setTextSize(20);root.addView(title);
+  LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
+  TextView title=new TextView(this);title.setText("LAN Remote • 0.4.4");title.setTextSize(20);header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
+  Button power=action("TV power",()->lg.powerDialog());((RemoteButton)power).icon("power","TV power on or off");header.addView(power,new LinearLayout.LayoutParams(dp(52),dp(48)));
   row(root,action("vSeeBox",()->selectMode(false)),action("LG TV",()->selectMode(true)));
   LinearLayout outer=root;bluetoothPanel=new LinearLayout(this);bluetoothPanel.setOrientation(LinearLayout.VERTICAL);outer.addView(bluetoothPanel);root=bluetoothPanel;
   status=new TextView(this);status.setTextSize(13);status.setPadding(0,dp(4),0,dp(4));root.addView(status);
+  TextView tvStatus=new TextView(this);tvStatus.setTextSize(12);root.addView(tvStatus);
   LinearLayout setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
   Button setupToggle=action("Bluetooth setup ▾",()->{});setupToggle.setOnClickListener(v->{boolean show=setup.getVisibility()!=View.VISIBLE;setup.setVisibility(show?View.VISIBLE:View.GONE);setupToggle.setText(show?"Bluetooth setup ▴":"Bluetooth setup ▾");});
   row(setup,action("Enable",()->startHid()),action("Discoverable",()->discoverable()));
@@ -42,13 +45,12 @@ public class MainActivity extends Activity {
   TextView hint=new TextView(this);hint.setTextSize(13);hint.setText("Pair from the box using a mouse. If mouse buttons fail after updating, forget the phone on the box and pair again.");setup.addView(hint);
   row(root,key("Back",1,0x29),key("▲",1,0x52),key("Home",2,0x223));
   row(root,key("◀",1,0x50),key("OK",1,0x28),key("▶",1,0x4F));
-  row(root,key("Right click",3,2),key("▼",1,0x51),key("Menu",2,0x40));
-  row(root,key("Left click",3,1),connectedAction("Keyboard",()->keyboard()),action("TV Power",()->lg.powerDialog()));
+  row(root,null,key("▼",1,0x51),key("Menu",2,0x40));
+  mouseRow(root);
   
   row(root,key("Vol −",2,0xEA),key("Mute",2,0xE2),key("Vol +",2,0xE9));
   row(root,key("Previous",2,0xB6),key("Play / Pause",2,0xCD),key("Next",2,0xB5));
   row(root,action("HDMI 1",()->lg.quickHdmi(1)),action("HDMI 2",()->lg.quickHdmi(2)),action("HDMI 3",()->lg.quickHdmi(3)));
-  TextView tvStatus=new TextView(this);tvStatus.setTextSize(12);root.addView(tvStatus);
   root.addView(setupToggle,new LinearLayout.LayoutParams(-1,dp(48)));root.addView(setup);
   lg=new LgRemote(this,outer);lg.setMirrorStatus(tvStatus);root=outer;
   TextView updateStatus=new TextView(this);updateStatus.setTextSize(12);root.addView(updateStatus);
@@ -58,7 +60,26 @@ public class MainActivity extends Activity {
  private void selectMode(boolean tv){bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);}
  @Override protected void onDestroy(){if(lg!=null)lg.destroy();super.onDestroy();}
  private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
- private Button action(String label,Runnable fn){Button b=new Button(this);b.setText(label);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{fn.run();}catch(RuntimeException e){message("Error: "+e.getMessage());}});return b;}
+ private Button action(String label,Runnable fn){Button b=new RemoteButton(this);b.setText(label);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{fn.run();}catch(RuntimeException e){message("Error: "+e.getMessage());}});return b;}
+ private android.graphics.drawable.GradientDrawable mouseShape(int color,float[] corners){
+  android.graphics.drawable.GradientDrawable shape=new android.graphics.drawable.GradientDrawable();shape.setColor(color);shape.setCornerRadii(corners);return shape;
+ }
+ private void mouseRow(LinearLayout parent){
+  LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+  LinearLayout split=new LinearLayout(this);split.setGravity(Gravity.CENTER_VERTICAL);
+  Button left=key("Left",3,1),right=key("Right",3,2);left.setContentDescription("Left mouse click");right.setContentDescription("Right mouse click");
+  int fg=left.getTextColors().getDefaultColor(),rgb=fg&0x00ffffff;float r=dp(9);
+  float[] all={r,r,r,r,r,r,r,r},lc={r,r,0,0,0,0,r,r},rc={0,0,r,r,r,r,0,0};
+  android.graphics.drawable.GradientDrawable shell=mouseShape(0x14000000|rgb,all);shell.setStroke(dp(1),0x48000000|rgb);split.setBackground(shell);
+  android.content.res.ColorStateList ripple=android.content.res.ColorStateList.valueOf(0x33000000|rgb);
+  left.setBackground(new android.graphics.drawable.RippleDrawable(ripple,null,mouseShape(0xffffffff,lc)));
+  right.setBackground(new android.graphics.drawable.RippleDrawable(ripple,null,mouseShape(0xffffffff,rc)));
+  split.addView(left,new LinearLayout.LayoutParams(0,dp(48),1));
+  View seam=new View(this);seam.setBackgroundColor(0x55000000|rgb);split.addView(seam,new LinearLayout.LayoutParams(dp(1),dp(28)));
+  split.addView(right,new LinearLayout.LayoutParams(0,dp(48),1));
+  LinearLayout.LayoutParams group=new LinearLayout.LayoutParams(0,dp(48),2);group.setMargins(dp(4),0,dp(4),0);row.addView(split,group);
+  Button keyboard=connectedAction("Keyboard",()->keyboard());((RemoteButton)keyboard).icon("keyboard","Open keyboard");row.addView(keyboard,new LinearLayout.LayoutParams(0,dp(48),1));parent.addView(row);
+ }
  private Button connectedAction(String label,Runnable r){Button b=action(label,r);b.setEnabled(false);controls.add(b);return b;}
  private Button key(String label,int report,int usage){return connectedAction(label,()->send(report,usage));}
  private void keyboard(){if(service==null||!service.ready())return;EditText entry=new EditText(this);entry.setHint("Type or paste text");entry.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);entry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});

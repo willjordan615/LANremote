@@ -58,9 +58,9 @@ final class LgRemote {
   row(command("Vol −",()->request("audio/volumeDown",null)),command("Mute",()->button("MUTE")),command("Vol +",()->request("audio/volumeUp",null)));
   row(command("Ch −",()->button("CHANNELDOWN")),command("Exit",()->button("EXIT")),command("Ch +",()->button("CHANNELUP")));
   row(command("⏪",()->button("REWIND")),command("Play",()->button("PLAY")),command("Pause",()->button("PAUSE")),command("⏩",()->button("FASTFORWARD")));
-  row(command("Keyboard",()->keyboard()),command("Backspace",()->request("com.webos.service.ime/deleteCharacters",obj("count",1))),command("Enter",()->request("com.webos.service.ime/sendEnterKey",obj())));
+  Button keyboard=command("Keyboard",()->keyboard());((RemoteButton)keyboard).icon("keyboard","Open TV keyboard");
+  row(keyboard,command("Backspace",()->request("com.webos.service.ime/deleteCharacters",obj("count",1))),command("Enter",()->request("com.webos.service.ime/sendEnterKey",obj())));
   row(action("HDMI 1",()->quickHdmi(1)),action("HDMI 2",()->quickHdmi(2)),action("HDMI 3",()->quickHdmi(3)));
-  row(action("TV Power",()->powerDialog()));
   panel.addView(setupToggle,new LinearLayout.LayoutParams(-1,dp(48)));panel.addView(setup);
   ArrayAdapter<String> empty=new ArrayAdapter<>(a,android.R.layout.simple_spinner_dropdown_item,Collections.singletonList("HDMI / external inputs"));inputs.setAdapter(empty);
   message("Open TV setup to connect.");
@@ -68,7 +68,7 @@ final class LgRemote {
  }
  void visible(boolean value){panel.setVisibility(value?View.VISIBLE:View.GONE);}
  private int dp(int n){return (int)(activity.getResources().getDisplayMetrics().density*n+.5f);}
- private Button action(String text,Runnable run){Button b=new Button(activity);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{run.run();}catch(Exception e){message("TV error: "+e.getMessage());}});return b;}
+ private Button action(String text,Runnable run){Button b=new RemoteButton(activity);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{run.run();}catch(Exception e){message("TV error: "+e.getMessage());}});return b;}
  private Button command(String t,Runnable r){Button b=action(t,r);buttons.add(b);b.setEnabled(false);return b;}
  private void row(Button... bs){rowIn(panel,bs);}
  private void rowIn(LinearLayout parent,Button... bs){LinearLayout row=new LinearLayout(activity);for(Button b:bs)row.addView(b==null?new View(activity):b,new LinearLayout.LayoutParams(0,dp(48),1));parent.addView(row);}
