@@ -48,7 +48,7 @@ public class RemoteService extends Service {
   NotificationManager nm=getSystemService(NotificationManager.class);nm.createNotificationChannel(new NotificationChannel(CHANNEL,"Bluetooth remote",NotificationManager.IMPORTANCE_LOW));nm.createNotificationChannel(new NotificationChannel("relay_approval","Wi-Fi remote approvals",NotificationManager.IMPORTANCE_HIGH));
  }
  @Override public int onStartCommand(Intent intent,int flags,int startId){
-  if(intent!=null&&STOP.equals(intent.getAction())){shutdown();return START_NOT_STICKY;}
+  if(intent!=null&&STOP.equals(intent.getAction())){remotePrefs().edit().putBoolean("box_reconnect_paused",true).apply();shutdown();return START_NOT_STICKY;}
   stopped=false;startForeground(1,notification());enable();return START_NOT_STICKY;
  }
  private Notification notification(){
