@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {readFileSync,writeFileSync,renameSync} from 'node:fs';
-import {isIPv4} from 'node:net';
+import {privateIP,wifiIP,ssdp,pingNeighbors,candidates} from './discovery.mjs';
 import {createAndroidRemote,RemoteKeyCode} from '@kud/androidtv-remote';
 import {Bonjour} from 'bonjour-service';
 const host='127.0.0.1',port=8765,origin='http://'+host+':'+port;
@@ -8,9 +8,10 @@ const keyFile=new URL('./.remote-keys.json',import.meta.url),tmpFile=new URL('./
 const html=readFileSync(new URL('./index.html',import.meta.url));
 let certs={};try{certs=JSON.parse(readFileSync(keyFile,'utf8'));}catch(e){if(e.code!=='ENOENT')console.error('Could not read pairings:',e.message);}
 let remote=null,ip='',status='Disconnected',ready=false,pairing=false;
-const devices=new Map();let bonjour,browser;
-function privateIP(s){if(typeof s!=='string'||!isIPv4(s))return false;const [a,b]=s.split('.').map(Number);return a===10||(a===192&&b===168)||(a===172&&b>=16&&b<=31)||(a===169&&b===254);}
-function discover(){browser?.stop();bonjour?.destroy();devices.clear();bonjour=new Bonjour({},e=>{console.error('Discovery:',e.message);});browser=bonjour.find({type:'androidtvremote2'},service=>{for(const address of service.addresses||[])if(privateIP(address))devices.set(address,{ip:address,name:service.name||address});});}
+const devices=new Map();let bonjour,browsers=[],scan={running:false,message:'Refresh discovers advertised services; Scan Wi-Fi checks nearby responding devices.'};
+function addDevice(address,name,source){if(!privateIP(address))return;const prior=devices.get(address);const remote=source==='androidtvremote2'||prior?.remote===true;const sources=[...new Set([...(prior?.sources||[]),source])];devices.set(address,{ip:address,name:source==='androidtvremote2'||!prior||prior.name==='Responding device'?name:prior.name,remote,sources});}
+function discover(){for(const b of browsers)b.stop();browsers=[];bonjour?.destroy();bonjour=new Bonjour({},e=>console.error('Discovery:',e.message));for(const type of ['androidtvremote2','googlecast','dial','airplay','http']){browsers.push(bonjour.find({type},service=>{for(const address of service.addresses||[])addDevice(address,service.name||address,type);}));}}
+async function scanWifi(address){if(scan.running)throw Error('Scan already running');const local=wifiIP();if(local&&address&&address!==local)throw Error('Use the phone Wi-Fi address shown in settings');address=local||address;candidates(address);scan={running:true,message:'Searching local Wi-Fi…'};try{const [,result]=await Promise.all([ssdp(addDevice),pingNeighbors(address,addDevice,(n,total)=>{scan.message='Checking local addresses '+n+'/'+total;})]);scan.message=result.unavailable===result.total?'Ping unavailable on this phone; advertised devices only.':'Scan complete. Some devices do not reply to ping.';}catch(e){scan.message='Scan failed: '+e.message;}finally{scan.running=false;}}
 function stop(){const old=remote;remote=null;ready=false;pairing=false;try{old?.stop();}catch{}status='Disconnected';}
 function save(){writeFileSync(tmpFile,JSON.stringify(certs),{mode:0o600});renameSync(tmpFile,keyFile);}
 function connect(address,forget=false){
@@ -31,12 +32,14 @@ async function body(req){let s='';for await(const chunk of req){s+=chunk;if(s.le
 const server=http.createServer(async(req,res)=>{
  if(req.headers.host!==host+':'+port)return json(res,403,{error:'Invalid host'});
  try{
-  if(req.method==='GET'&&req.url==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(html);}
-  if(req.method==='GET'&&req.url==='/state')return json(res,200,{ip,status,ready,pairing,devices:[...devices.values()]});
+  const pathname=new URL(req.url,origin).pathname;
+  if(req.method==='GET'&&pathname==='/'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"});return res.end(html);}
+  if(req.method==='GET'&&pathname==='/state')return json(res,200,{ip,status,ready,pairing,devices:[...devices.values()].sort((a,b)=>Number(b.remote)-Number(a.remote)||a.ip.localeCompare(b.ip,undefined,{numeric:true})),scan,wifiIP:wifiIP()});
   if(req.method!=='POST'||req.headers.origin!==origin||!req.headers['content-type']?.startsWith('application/json'))return json(res,403,{error:'Only same-origin JSON requests allowed'});
   const data=await body(req);
-  switch(req.url){
-   case '/discover':discover();break;
+  switch(pathname){
+   case '/discover':try{discover();}catch(e){console.error('mDNS:',e.message);}void ssdp(addDevice);break;
+   case '/scan':if(scan.running)throw Error('Scan already running');if(wifiIP()&&data.address&&data.address!==wifiIP())throw Error('Use your phone Wi-Fi IP');candidates(wifiIP()||data.address);void scanWifi(data.address).catch(e=>{scan={running:false,message:e.message};});break;
    case '/connect':connect(data.ip);break;
    case '/forget':connect(data.ip,true);break;
    case '/disconnect':stop();break;
@@ -48,4 +51,4 @@ const server=http.createServer(async(req,res)=>{
  }catch(e){return json(res,400,{error:e.message});}
 });
 server.listen(port,host,()=>{console.log('Open '+origin+' in your browser. Ctrl+C to quit.');try{discover();}catch(e){console.error('Discovery unavailable:',e.message);}});
-process.on('SIGINT',()=>{stop();browser?.stop();bonjour?.destroy();server.close(()=>process.exit(0));});
+process.on('SIGINT',()=>{stop();for(const b of browsers)b.stop();bonjour?.destroy();server.close(()=>process.exit(0));});
