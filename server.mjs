@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {createConnection} from 'node:net';
 import {readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {privateIP,wifiIP,ssdp,pingNeighbors,candidates} from './discovery.mjs';
 import {createAndroidRemote,RemoteKeyCode} from '@kud/androidtv-remote';
@@ -7,25 +8,36 @@ const host='127.0.0.1',port=8765,origin='http://'+host+':'+port;
 const keyFile=new URL('./.remote-keys.json',import.meta.url),tmpFile=new URL('./.remote-keys.json.tmp',import.meta.url);
 const html=readFileSync(new URL('./index.html',import.meta.url));
 let certs={};try{certs=JSON.parse(readFileSync(keyFile,'utf8'));}catch(e){if(e.code!=='ENOENT')console.error('Could not read pairings:',e.message);}
-let remote=null,ip='',status='Disconnected',ready=false,pairing=false;
+let remote=null,ip='',status='Disconnected',ready=false,pairing=false,attempt=0,connectionTimer;
 const devices=new Map();let bonjour,browsers=[],scan={running:false,message:'Refresh discovers advertised services; Scan Wi-Fi checks nearby responding devices.'};
 function addDevice(address,name,source){if(!privateIP(address))return;const prior=devices.get(address);const remote=source==='androidtvremote2'||prior?.remote===true;const sources=[...new Set([...(prior?.sources||[]),source])];devices.set(address,{ip:address,name:source==='androidtvremote2'||!prior||prior.name==='Responding device'?name:prior.name,remote,sources});}
 function discover(){for(const b of browsers)b.stop();browsers=[];bonjour?.destroy();bonjour=new Bonjour({},e=>console.error('Discovery:',e.message));for(const type of ['androidtvremote2','googlecast','dial','airplay','http']){browsers.push(bonjour.find({type},service=>{for(const address of service.addresses||[])addDevice(address,service.name||address,type);}));}}
 async function scanWifi(address){if(scan.running)throw Error('Scan already running');const local=wifiIP();if(local&&address&&address!==local)throw Error('Use the phone Wi-Fi address shown in settings');address=local||address;candidates(address);scan={running:true,message:'Searching local Wi-Fi…'};try{const [,result]=await Promise.all([ssdp(addDevice),pingNeighbors(address,addDevice,(n,total)=>{scan.message='Checking local addresses '+n+'/'+total;})]);scan.message=result.unavailable===result.total?'Ping unavailable on this phone; advertised devices only.':'Scan complete. Some devices do not reply to ping.';}catch(e){scan.message='Scan failed: '+e.message;}finally{scan.running=false;}}
-function stop(){const old=remote;remote=null;ready=false;pairing=false;try{old?.stop();}catch{}status='Disconnected';}
+function stop(){attempt++;clearTimeout(connectionTimer);const old=remote;remote=null;ready=false;pairing=false;try{old?.stop();}catch{}status='Disconnected';}
 function save(){writeFileSync(tmpFile,JSON.stringify(certs),{mode:0o600});renameSync(tmpFile,keyFile);}
+function probe(address,port){return new Promise(resolve=>{const sock=createConnection({host:address,port});let done=false;const finish=result=>{if(done)return;done=true;sock.destroy();resolve(result);};sock.setTimeout(2500);sock.once('connect',()=>finish('open'));sock.once('timeout',()=>finish('no response'));sock.once('error',e=>finish(e.code==='ECONNREFUSED'?'closed':'unreachable'));});}
 function connect(address,forget=false){
  if(!privateIP(address))throw Error('Enter a private IPv4 address from your home network.');
- stop();ip=address;if(forget){delete certs[ip];save();}
- const opts={service_name:'LAN Remote'};if(certs[ip])opts.cert=certs[ip];
- const r=createAndroidRemote(ip,opts);remote=r;status='Connecting…';
- const active=fn=>(...args)=>{if(remote===r)fn(...args);};
- r.on('secret',active(()=>{ready=false;pairing=true;status='Enter the PIN shown on your TV';}));
- r.on('ready',active(()=>{ready=true;pairing=false;status='Connected';try{certs[address]=r.getCertificate();save();}catch(e){status='Connected; could not save pairing';}}));
- r.on('unpaired',active(()=>{ready=false;pairing=false;status='Pairing rejected. Tap Re-pair.';}));
- r.on('error',active(e=>{ready=false;status='Connection error: '+(e?.message||e);}));
- Promise.resolve().then(()=>r.start()).then(active(ok=>{if(ok===false&&!ready&&!pairing)status='Connection failed. Check IP and remote service.';})).catch(active(e=>{ready=false;pairing=false;status='Connection failed: '+e.message;}));
+ stop();const current=attempt;ip=address;if(forget){delete certs[ip];save();}
+ status='Checking Android TV service on '+address+'…';
+ void (async()=>{
+ const [control,registration]=await Promise.all([probe(address,6466),probe(address,6467)]);
+ if(current!==attempt)return;
+ const diagnostic='6466 '+control+'; 6467 '+registration;
+ if(control!=='open'||(!certs[address]&&registration!=='open')){status='Android TV remote not reachable ('+diagnostic+'). Wi-Fi presence alone does not confirm remote support.';return;}
+ const opts={service_name:'LAN Remote'};if(certs[address])opts.cert=certs[address];
+ const r=createAndroidRemote(address,opts);remote=r;status='Remote service found ('+diagnostic+'). Connecting…';
+ const active=fn=>(...args)=>{if(remote===r&&current===attempt)fn(...args);};
+ const fail=message=>{stop();status=message;};
+ connectionTimer=setTimeout(active(()=>fail('Remote handshake timed out ('+diagnostic+'). Device may use a different protocol.')),15000);
+ r.on('secret',active(()=>{clearTimeout(connectionTimer);ready=false;pairing=true;status='Enter the PIN shown on your TV';}));
+ r.on('ready',active(()=>{clearTimeout(connectionTimer);ready=true;pairing=false;status='Connected';try{certs[address]=r.getCertificate();save();}catch(e){status='Connected; could not save pairing';}}));
+ r.on('unpaired',active(()=>fail('Pairing rejected. Tap Re-pair.')));
+ r.on('error',active(e=>fail('Connection error: '+(e?.message||e)+' ('+diagnostic+')')));
+ Promise.resolve().then(()=>r.start()).then(active(ok=>{if(ok===false&&!ready&&!pairing)fail('Connection failed ('+diagnostic+').');})).catch(active(e=>fail('Connection failed: '+e.message+' ('+diagnostic+')')));
+ })().catch(e=>{if(current===attempt){stop();status='Connection failed: '+e.message;}});
 }
+
 const allowed=new Set(['DPAD_UP','DPAD_DOWN','DPAD_LEFT','DPAD_RIGHT','DPAD_CENTER','HOME','BACK','MENU','VOLUME_UP','VOLUME_DOWN','VOLUME_MUTE','MEDIA_PLAY_PAUSE','MEDIA_REWIND','MEDIA_FAST_FORWARD','CHANNEL_UP','CHANNEL_DOWN','POWER',...Array.from({length:10},(_,i)=>String(i))]);
 function json(res,code,value){res.writeHead(code,{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(value));}
 async function body(req){let s='';for await(const chunk of req){s+=chunk;if(s.length>4096)throw Error('Request too large');}return JSON.parse(s||'{}');}
@@ -43,7 +55,7 @@ const server=http.createServer(async(req,res)=>{
    case '/connect':connect(data.ip);break;
    case '/forget':connect(data.ip,true);break;
    case '/disconnect':stop();break;
-   case '/pin':if(!remote||!pairing)throw Error('Start pairing first');if(typeof data.pin!=='string'||!/^[0-9A-F]{6}$/i.test(data.pin))throw Error('Enter the six-character TV code');if(!remote.sendCode(data.pin.toUpperCase()))throw Error('Code rejected; check the TV');status='Pairing…';break;
+   case '/pin':if(!remote||!pairing)throw Error('Start pairing first');if(typeof data.pin!=='string'||!/^[0-9A-F]{6}$/i.test(data.pin))throw Error('Enter the six-character TV code');if(!remote.sendCode(data.pin.toUpperCase()))throw Error('Code rejected; check the TV');status='Pairing…';clearTimeout(connectionTimer);connectionTimer=setTimeout(()=>{if(!ready){stop();status='Pairing timed out. Tap Re-pair.';}},15000);break;
    case '/key':{if(!remote||!ready)throw Error('Connect first');if(!allowed.has(data.key))throw Error('Unknown key');const code=RemoteKeyCode['KEYCODE_'+data.key];if(typeof code!=='number')throw Error('Key not supported by library');remote.sendKey(code);break;}
    default:return json(res,404,{error:'Not found'});
   }
