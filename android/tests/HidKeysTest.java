@@ -3,10 +3,10 @@ import java.util.*;
 public class HidKeysTest {
  private static void eq(int a,int b){if(a!=b)throw new AssertionError(a+" != "+b);}
  public static void main(String[] args){
-  if(!java.util.Arrays.equals(HidKeys.movement(-127,127),new byte[]{0,-127,127}))throw new AssertionError("Mouse movement bytes");
+  if(!java.util.Arrays.equals(HidKeys.movement(-127,127),new byte[]{0,-127,127,0}))throw new AssertionError("Mouse movement bytes");
   try{HidKeys.movement(-128,0);throw new AssertionError("Invalid mouse delta accepted");}catch(IllegalArgumentException expected){}
 
-  byte[] right=HidKeys.report(3,2);eq(right.length,3);eq(right[0],2);eq(right[1],0);eq(right[2],0);
+  byte[] right=HidKeys.report(3,2);eq(right.length,4);eq(right[0],2);eq(right[1],0);eq(right[2],0);eq(right[3],0);eq(HidKeys.report(3,1)[0],1);eq(HidKeys.report(2,0x30)[0],0x30);
   eq(HidKeys.report(1,0x28)[2],0x28);
   List<byte[]> keys=HidKeys.text("aA0!?)\n");
   eq(keys.size(),7);eq(keys.get(0)[2],4);eq(keys.get(1)[0],2);eq(keys.get(2)[2],0x27);eq(keys.get(3)[2],0x1e);eq(keys.get(4)[2],0x38);eq(keys.get(5)[2],0x27);eq(keys.get(6)[2],0x28);

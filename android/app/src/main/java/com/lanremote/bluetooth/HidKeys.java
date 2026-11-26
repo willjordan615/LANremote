@@ -8,10 +8,10 @@ final class HidKeys {
  static byte[] report(int id,int usage){
   if(id==1)return keyboard(usage,0);
   if(id==2)return new byte[]{(byte)usage,(byte)(usage>>8)};
-  if(id==3)return new byte[]{(byte)(usage&7),0,0};
+  if(id==3)return new byte[]{(byte)(usage&7),0,0,0};
   throw new IllegalArgumentException("Unknown HID report");
  }
- static byte[] movement(int x,int y){if(x<-127||x>127||y<-127||y>127)throw new IllegalArgumentException("Invalid mouse delta");return new byte[]{0,(byte)x,(byte)y};}
+ static byte[] movement(int x,int y){if(x<-127||x>127||y<-127||y>127)throw new IllegalArgumentException("Invalid mouse delta");return new byte[]{0,(byte)x,(byte)y,0};}
  // Standard US keyboard layout. Reject unsupported characters before sending anything.
  static List<byte[]> text(String text){
   if(text.length()>500)throw new IllegalArgumentException("Send up to 500 characters at a time.");

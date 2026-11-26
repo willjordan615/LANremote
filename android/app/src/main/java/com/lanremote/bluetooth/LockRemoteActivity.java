@@ -13,7 +13,7 @@ public final class LockRemoteActivity extends Activity {
  private final Map<Button,Boolean> controls=new LinkedHashMap<>();
  private final Map<Button,String[]> labels=new LinkedHashMap<>();
  private final ArrayList<Button> tvControls=new ArrayList<>();
- private TextView status,tvStatus;private Button boxMode,tvModeButton,connectTv;
+ private TextView status,tvStatus;private Button boxMode,tvModeButton,connectTv,boxPowerButton;
  private LgRemote lg;
  private Touchpad touchpad;
  static boolean enabled(Context c){return c.getSharedPreferences("remote",MODE_PRIVATE).getBoolean("lock_remote",false);}
@@ -35,7 +35,7 @@ public final class LockRemoteActivity extends Activity {
   gap(root);row(root,tvAction("HDMI 1",()->lg.quickHdmi(1)),tvAction("HDMI 2",()->lg.quickHdmi(2)),tvAction("HDMI 3",()->lg.quickHdmi(3)));
   Button on=action("TV on",()->lg.sessionWake());tvControls.add(on);
   Button off=tvAction("TV off",()->lg.sessionOff());
-  row(root,on,off);
+  Button boxPower=action("Box power",()->{if(guest!=null&&guest.ready())guest.submit(RelayWire.key(2,0x30));else if(service!=null&&service.ready())service.send(2,0x30);});boxPowerButton=boxPower;row(root,boxPower,on,off);
   connectTv=action("Reconnect saved TV",()->lg.connect());row(root,connectTv);
   row(root,action("Close remote session",()->finish()));
   // The existing TV transport is reused, but its configuration panel is never displayed here.
@@ -52,7 +52,7 @@ public final class LockRemoteActivity extends Activity {
  private void row(LinearLayout root,Button... buttons){LinearLayout row=new LinearLayout(this);for(Button b:buttons)row.addView(b==null?new View(this):b,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(row);}
  private void select(boolean tv){tvMode=tv;boxMode.setSelected(!tv);tvModeButton.setSelected(tv);for(Map.Entry<Button,String[]> item:labels.entrySet())item.getKey().setText(item.getValue()[tv?1:0]);if(tv&&active&&lg!=null&&!lg.ready(false))lg.connect();refresh();}
  private void movePointer(int x,int y){if(!enabled(this))return;if(tvMode){if(lg!=null)lg.movePointer(x,y);}else if(guest!=null&&guest.ready())guest.movePointer(x,y);else if(service!=null)service.movePointer(x,y);}
- private void refresh(){if(status==null||lg==null)return;boolean box=guest!=null?guest.ready():service!=null&&service.ready();status.setText(box?"Box remote connected":"Box not connected • unlock for setup");for(Map.Entry<Button,Boolean> item:controls.entrySet())item.getKey().setEnabled(enabled(this)&&(tvMode?lg.ready(item.getValue()):box));for(Button b:tvControls)b.setEnabled(enabled(this)&&("TV on".contentEquals(b.getText())?lg.sessionCanWake():lg.ready(false)));connectTv.setEnabled(enabled(this)&&lg.sessionConfigured());if(touchpad!=null)touchpad.available(enabled(this)&&(tvMode?lg.ready(true):box));}
+ private void refresh(){if(status==null||lg==null)return;boolean box=guest!=null?guest.ready():service!=null&&service.ready();status.setText(box?"Box remote connected":"Box not connected • unlock for setup");for(Map.Entry<Button,Boolean> item:controls.entrySet())item.getKey().setEnabled(enabled(this)&&(tvMode?lg.ready(item.getValue()):box));for(Button b:tvControls)b.setEnabled(enabled(this)&&("TV on".contentEquals(b.getText())?lg.sessionCanWake():lg.ready(false)));connectTv.setEnabled(enabled(this)&&lg.sessionConfigured());boxPowerButton.setEnabled(enabled(this)&&box);if(touchpad!=null)touchpad.available(enabled(this)&&(tvMode?lg.ready(true):box));}
  @Override protected void onStart(){super.onStart();if(!enabled(this)){finish();return;}active=true;String invite=getSharedPreferences("remote",MODE_PRIVATE).getString("relayInvite","");if(!invite.isEmpty())try{guest=new RelayGuest(this,main,RelayWire.Invite.parse(invite),(r,s)->refresh());}catch(RuntimeException ignored){}else bound=bindService(new Intent(this,RemoteService.class),connection,0);if(lg!=null&&lg.sessionConfigured())lg.connect();main.post(tick);refresh();}
  @Override protected void onStop(){active=false;main.removeCallbacks(tick);if(guest!=null){guest.close();guest=null;}service=null;if(bound){unbindService(connection);bound=false;}super.onStop();}
  @Override protected void onDestroy(){if(lg!=null)lg.destroy();main.removeCallbacksAndMessages(null);super.onDestroy();}

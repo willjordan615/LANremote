@@ -25,7 +25,7 @@ public class RelayWireTest {
   byte[] frame=buffer.toByteArray();
   check(Arrays.equals(cmd,RelayWire.read(new DataInputStream(new ByteArrayInputStream(frame)),key,challenge,1)));
   for(int i=0;i<4;i++){try{byte[] changed=frame.clone();if(i==3)changed[changed.length-1]^=1;RelayWire.read(new DataInputStream(new ByteArrayInputStream(changed)),i==0?RelayWire.random(32):key,i==1?RelayWire.random(16):challenge,i==2?2:1);throw new AssertionError("Accepted unauthenticated frame");}catch(javax.crypto.AEADBadTagException expected){}}
-  check(!RelayWire.allowed(1,0x65));check(!RelayWire.allowed(2,0xffff));check(RelayWire.text("Hello").length==6);
+  check(RelayWire.allowed(2,0x30));check(!RelayWire.allowed(1,0x65));check(!RelayWire.allowed(2,0xffff));check(RelayWire.text("Hello").length==6);
   System.out.println("Relay invitation, allowed commands, authentication, replay and tamper tests passed");
  }
 }

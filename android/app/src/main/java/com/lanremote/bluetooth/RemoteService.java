@@ -21,8 +21,8 @@ public class RemoteService extends Service {
  private boolean registered, requesting, sending, stopped, connecting;
  private final ArrayDeque<KeyReport> queue=new ArrayDeque<>();
  private static final class KeyReport {final int id;final byte[] data;final boolean motion;KeyReport(int id,byte[] data){this(id,data,false);}KeyReport(int id,byte[] data,boolean motion){this.id=id;this.data=data;this.motion=motion;}}
- private int mouseAccepted,mouseRejected,mouseBusy;private String mouseProtocol="not reported",mouseError="";
- public String mouseDiagnostics(){return "Bluetooth mouse report ID 3 (buttons, relative X/Y)\nHost protocol: "+mouseProtocol+"\nMotion reports accepted by Android: "+mouseAccepted+"\nRejected: "+mouseRejected+"\nDropped while busy: "+mouseBusy+(mouseError.isEmpty()?"":"\nLast error: "+mouseError)+"\nAcceptance is not proof of cursor movement on the box.";}
+ private int mouseAccepted,mouseRejected,mouseBusy,clickAccepted,clickRejected;private String mouseProtocol="not reported",mouseError="";
+ public String mouseDiagnostics(){return "Bluetooth mouse report ID 3 (buttons, relative X/Y, wheel)\nHost protocol: "+mouseProtocol+"\nMotion reports accepted by Android: "+mouseAccepted+"\nClick presses accepted: "+clickAccepted+"\nClick presses/releases rejected: "+clickRejected+"\nMotion rejected: "+mouseRejected+"\nDropped while busy: "+mouseBusy+(mouseError.isEmpty()?"":"\nLast error: "+mouseError)+"\nAcceptance is not proof of cursor movement on the box.";}
  private int sendGeneration;
  private String status="Starting Bluetooth remote…";
  private final Handler handler=new Handler(Looper.getMainLooper());
@@ -36,10 +36,10 @@ public class RemoteService extends Service {
   0x95,0x05,0x75,0x01,0x05,0x08,0x19,0x01,0x29,0x05,0x91,0x02,0x95,0x01,0x75,0x03,0x91,0x01,
   0x95,0x06,0x75,0x08,0x15,0x00,0x25,0x65,0x05,0x07,0x19,0x00,0x29,0x65,0x81,0x00,0xC0,
   0x05,0x0C,0x09,0x01,0xA1,0x01,0x85,0x02,0x15,0x00,0x26,0xFF,0x03,0x19,0x00,0x2A,0xFF,0x03,0x75,0x10,0x95,0x01,0x81,0x00,0xC0,
-  // Report 3: mouse buttons, relative X and Y (three bytes).
+  // Report 3: conventional mouse buttons, relative X, Y and wheel (four bytes).
   0x05,0x01,0x09,0x02,0xA1,0x01,0x85,0x03,0x09,0x01,0xA1,0x00,
   0x05,0x09,0x19,0x01,0x29,0x03,0x15,0x00,0x25,0x01,0x95,0x03,0x75,0x01,0x81,0x02,
-  0x95,0x01,0x75,0x05,0x81,0x01,0x05,0x01,0x09,0x30,0x09,0x31,0x15,0x81,0x25,0x7F,0x75,0x08,0x95,0x02,0x81,0x06,0xC0,0xC0);
+  0x95,0x01,0x75,0x05,0x81,0x03,0x05,0x01,0x09,0x30,0x09,0x31,0x09,0x38,0x15,0x81,0x25,0x7F,0x75,0x08,0x95,0x03,0x81,0x06,0xC0,0xC0);
  private static byte[] bytes(int... v){byte[] b=new byte[v.length];for(int i=0;i<v.length;i++)b[i]=(byte)v[i];return b;}
 
  public class LocalBinder extends Binder { public RemoteService getService(){return RemoteService.this;} }
@@ -67,10 +67,10 @@ public class RemoteService extends Service {
  public String nickname(BluetoothDevice d){return getSharedPreferences("remote",MODE_PRIVATE).getString("nickname_"+d.getAddress(),"");}
  public void nickname(BluetoothDevice d,String value){getSharedPreferences("remote",MODE_PRIVATE).edit().putString("nickname_"+d.getAddress(),value.trim()).apply();if(matches(d))message(ready()?"Connected: "+name(d):"Selected: "+name(d));}
  private void reject(BluetoothDevice d){try{if(hid!=null)hid.disconnect(d);}catch(RuntimeException ignored){}}
- private void accepted(BluetoothDevice d){if(!d.equals(host)){clearQueue();mouseAccepted=mouseRejected=mouseBusy=0;mouseError="";mouseProtocol="not reported";}host=d;connecting=false;switching=false;connectAttempt++;message("Connected: "+name(d));if(relay==null&&remotePrefs().getBoolean(sharePref(),false))try{startRelay();}catch(Exception e){message("Connected • sharing paused: "+e.getMessage());}}
+ private void accepted(BluetoothDevice d){if(!d.equals(host)){clearQueue();mouseAccepted=mouseRejected=mouseBusy=clickAccepted=clickRejected=0;mouseError="";mouseProtocol="not reported";}host=d;connecting=false;switching=false;connectAttempt++;message("Connected: "+name(d));if(relay==null&&remotePrefs().getBoolean(sharePref(),false))try{startRelay();}catch(Exception e){message("Connected • sharing paused: "+e.getMessage());}}
  private void reconcile(){if(hid==null)return;try{BluetoothDevice selected=null;for(BluetoothDevice d:hid.getConnectedDevices()){if(matches(d))selected=d;else if(!lastAddress().isEmpty())reject(d);}if(selected!=null)accepted(selected);else{host=null;if(lastAddress().isEmpty())message("Select your paired box in Bluetooth setup.");else reconnect();}}catch(RuntimeException e){message("Reconnect failed: "+e.getMessage());}}
  public void forgetTarget(){stopRelay();BluetoothDevice old=host;releaseOld();saveTarget("");clearQueue();host=null;connecting=false;switching=false;connectAttempt++;if(old!=null)reject(old);message("No target selected. Choose a paired device.");}
- private void releaseOld(){if(host!=null&&hid!=null&&sending){try{hid.sendReport(host,1,new byte[8]);hid.sendReport(host,2,new byte[2]);hid.sendReport(host,3,new byte[3]);}catch(RuntimeException ignored){}}}
+ private void releaseOld(){if(host!=null&&hid!=null&&sending){try{hid.sendReport(host,1,new byte[8]);hid.sendReport(host,2,new byte[2]);hid.sendReport(host,3,new byte[4]);}catch(RuntimeException ignored){}}}
 
  public void enable(){if(stopped||requesting||registered)return;if(adapter==null||!adapter.isEnabled()){message("Bluetooth unavailable or disabled.");return;}
   requesting=true;message("Requesting HID device profile…");
@@ -94,7 +94,7 @@ public class RemoteService extends Service {
    else if(state==BluetoothProfile.STATE_DISCONNECTED){if(d.equals(host)){clearQueue();host=null;}if(switching){switching=false;connecting=false;reconnect();}else if(matches(d)){connecting=false;connectAttempt++;message("Disconnected from "+name(d)+". Return to reconnect.");}}
   }
   @Override public void onSetProtocol(BluetoothDevice d,byte protocol){if(matches(d))mouseProtocol=protocol==BluetoothHidDevice.PROTOCOL_BOOT_MODE?"boot":protocol==BluetoothHidDevice.PROTOCOL_REPORT_MODE?"report":"unknown ("+protocol+")";}
-  @Override public void onGetReport(BluetoothDevice d,byte type,byte id,int size){if(stopped||hid==null||(!lastAddress().isEmpty()&&!matches(d)))return;int n=id==1?8:id==2?2:id==3?3:0;if(n>0&&type==BluetoothHidDevice.REPORT_TYPE_INPUT)hid.replyReport(d,type,id,new byte[n]);else hid.reportError(d,BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID);}
+  @Override public void onGetReport(BluetoothDevice d,byte type,byte id,int size){if(stopped||hid==null||(!lastAddress().isEmpty()&&!matches(d)))return;int n=id==1?8:id==2?2:id==3?4:0;if(n>0&&type==BluetoothHidDevice.REPORT_TYPE_INPUT)hid.replyReport(d,type,id,new byte[n]);else hid.reportError(d,BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID);}
  };
  public String name(BluetoothDevice d){try{String n=d.getName();String nick=nickname(d);return !nick.isEmpty()?nick:n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  public void resumeRemote(){if(stopped)return;if(!registered){enable();return;}reconnect();}
@@ -128,8 +128,8 @@ public class RemoteService extends Service {
  public void sendText(String text){if(!ready()||stopped)throw new IllegalStateException("Connect the vSeeBox first.");List<byte[]> reports=HidKeys.text(text);if(queue.size()+reports.size()>512)throw new IllegalStateException("Wait for the current text to finish.");for(byte[] data:reports)queue.add(new KeyReport(1,data));pump();}
  private void pump(){if(stopped||!ready()||hid==null||sending||queue.isEmpty())return;KeyReport r=queue.remove();BluetoothDevice target=host;BluetoothHidDevice proxy=hid;int generation=sendGeneration;try{
   if(r.motion){if(!proxy.sendReport(target,r.id,r.data)){mouseRejected++;mouseError="Android rejected the movement report";}else mouseAccepted++;sending=true;handler.postDelayed(()->{if(generation!=sendGeneration)return;sending=false;pump();},15);return;}
-  if(!proxy.sendReport(target,r.id,r.data)){clearQueue();message("Input report rejected. Reconnect the box.");return;}sending=true;
-  handler.postDelayed(()->{if(generation!=sendGeneration||stopped||!target.equals(host))return;try{if(!proxy.sendReport(target,r.id,new byte[r.data.length])){clearQueue();message("Input release rejected. Reconnect the box.");return;}}catch(RuntimeException e){clearQueue();message("Input release failed: "+e.getMessage());return;}handler.postDelayed(()->{if(generation!=sendGeneration)return;sending=false;pump();},15);},35);
+  if(!proxy.sendReport(target,r.id,r.data)){if(r.id==3)clickRejected++;clearQueue();message("Input report rejected. Reconnect the box.");return;}if(r.id==3)clickAccepted++;sending=true;
+  handler.postDelayed(()->{if(generation!=sendGeneration||stopped||!target.equals(host))return;try{if(!proxy.sendReport(target,r.id,new byte[r.data.length])){if(r.id==3)clickRejected++;clearQueue();message("Input release rejected. Reconnect the box.");return;}}catch(RuntimeException e){clearQueue();message("Input release failed: "+e.getMessage());return;}handler.postDelayed(()->{if(generation!=sendGeneration)return;sending=false;pump();},15);},35);
  }catch(RuntimeException e){if(r.motion){mouseRejected++;mouseError=e.getClass().getSimpleName();}clearQueue();message("Input failed: "+e.getMessage());}}
  public void shutdown(){if(stopped)return;stopped=true;pauseRelay();releaseOld();clearQueue();connectAttempt++;switching=false;handler.removeCallbacksAndMessages(null);BluetoothHidDevice p=hid;hid=null;host=null;registered=false;requesting=false;connecting=false;sending=false;if(p!=null){try{p.unregisterApp();}catch(RuntimeException ignored){}try{adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE,p);}catch(RuntimeException ignored){}}message("Remote stopped. Tap Enable to start.");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
  @Override public void onDestroy(){shutdown();observer=null;super.onDestroy();}

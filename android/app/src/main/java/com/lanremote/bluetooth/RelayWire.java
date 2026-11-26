@@ -37,7 +37,7 @@ final class RelayWire {
  static byte[] key(int report,int usage){if(!allowed(report,usage))throw new IllegalArgumentException("Unsupported remote key.");return new byte[]{1,(byte)report,(byte)(usage>>8),(byte)usage};}
  static boolean allowed(int report,int usage){
   if(report==1)return Arrays.asList(0x29,0x52,0x50,0x28,0x4f,0x51,0x2a,0x2b,0x2c).contains(usage);
-  if(report==2)return Arrays.asList(0x223,0x40,0xea,0xe2,0xe9,0xb6,0xcd,0xb5).contains(usage);
+  if(report==2)return Arrays.asList(0x30,0x223,0x40,0xea,0xe2,0xe9,0xb6,0xcd,0xb5).contains(usage);
   return report==3&&(usage==1||usage==2);
  }
  static boolean validMovement(int x,int y){return x>=-127&&x<=127&&y>=-127&&y<=127&&(x!=0||y!=0);}
