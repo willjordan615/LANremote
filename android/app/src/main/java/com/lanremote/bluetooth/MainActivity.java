@@ -23,6 +23,11 @@ public class MainActivity extends Activity {
  private AppUpdates updates;
  private LgRemote lg;
  private LinearLayout bluetoothPanel;
+ private boolean tvMode;
+ private Button boxModeButton,tvModeButton;
+ private final Map<Button,Boolean> pointerControls=new HashMap<>();
+ private final Map<Button,String[]> modeLabels=new HashMap<>();
+ private final Map<Button,String[]> modeDescriptions=new HashMap<>();
  private Spinner paired;
  private final ArrayList<BluetoothDevice> devices=new ArrayList<>();
  private final ArrayList<Button> controls=new ArrayList<>();
@@ -31,36 +36,53 @@ public class MainActivity extends Activity {
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(10),dp(6),dp(10),dp(6));scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
-  TextView title=new TextView(this);title.setText("LAN Remote • 0.4.6");title.setTextSize(20);header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
+  TextView title=new TextView(this);title.setText("LAN Remote • 0.4.7");title.setTextSize(20);header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
   Button power=action("TV power",()->lg.powerDialog());((RemoteButton)power).icon("power","TV power on or off");header.addView(power,new LinearLayout.LayoutParams(dp(52),dp(48)));
-  row(root,action("vSeeBox",()->selectMode(false)),action("LG TV",()->selectMode(true)));
-  LinearLayout outer=root;bluetoothPanel=new LinearLayout(this);bluetoothPanel.setOrientation(LinearLayout.VERTICAL);outer.addView(bluetoothPanel);root=bluetoothPanel;
+  boxModeButton=action("vSeeBox",()->selectMode(false));tvModeButton=action("LG TV",()->selectMode(true));row(root,boxModeButton,tvModeButton);
   status=new TextView(this);status.setTextSize(13);status.setPadding(0,dp(4),0,dp(4));root.addView(status);
   TextView tvStatus=new TextView(this);tvStatus.setTextSize(12);root.addView(tvStatus);
+  gap(root,8);
+  row(root,dual("Back",1,0x29,"BACK",true),dual("▲",1,0x52,"UP",true),dual("Home",2,0x223,"HOME",true));
+  row(root,dual("◀",1,0x50,"LEFT",true),dual("OK",1,0x28,"ENTER",true),dual("▶",1,0x4F,"RIGHT",true));
+  Button settings=action("Settings",()->{selectMode(true);lg.quickSettings();});
+  ((RemoteButton)settings).icon("settings","LG quick settings; hold for picture settings");
+  settings.setOnLongClickListener(v->{selectMode(true);lg.pictureModes();return true;});
+  Button menu=dual("Menu",2,0x40,"INPUT",true);modeLabels.put(menu,new String[]{"Menu","Inputs"});
+  row(root,settings,dual("▼",1,0x51,"DOWN",true),menu);
+  gap(root,10);
+  mouseRow(root);
+  gap(root,10);
+  row(root,dual("Vol −",2,0xEA,"volumeDown",false),dual("Mute",2,0xE2,"MUTE",true),dual("Vol +",2,0xE9,"volumeUp",false));
+  Button prev=dual("Previous",2,0xB6,"REWIND",true),play=dual("Play / Pause",2,0xCD,"playPause",true),next=dual("Next",2,0xB5,"FASTFORWARD",true);
+  modeLabels.put(prev,new String[]{"Previous","Rewind"});modeLabels.put(next,new String[]{"Next","Fast fwd"});row(root,prev,play,next);
+  gap(root,10);
+  row(root,action("HDMI 1",()->lg.quickHdmi(1)),action("HDMI 2",()->lg.quickHdmi(2)),action("HDMI 3",()->lg.quickHdmi(3)));
+  gap(root,8);
+  bluetoothPanel=new LinearLayout(this);bluetoothPanel.setOrientation(LinearLayout.VERTICAL);root.addView(bluetoothPanel);
   LinearLayout setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
   Button setupToggle=action("Bluetooth setup ▾",()->{});setupToggle.setOnClickListener(v->{boolean show=setup.getVisibility()!=View.VISIBLE;setup.setVisibility(show?View.VISIBLE:View.GONE);setupToggle.setText(show?"Bluetooth setup ▴":"Bluetooth setup ▾");});
+  bluetoothPanel.addView(setupToggle,new LinearLayout.LayoutParams(-1,dp(48)));bluetoothPanel.addView(setup);
   row(setup,action("Enable",()->startHid()),action("Discoverable",()->discoverable()));
   paired=new Spinner(this);setup.addView(paired,new LinearLayout.LayoutParams(-1,dp(48)));
   row(setup,action("Refresh",()->refresh()),action("Connect",()->connectSelected()),action("Stop",()->{if(service!=null)service.shutdown();detach();started=false;message("Remote stopped. Open setup to enable.");}));
-  TextView hint=new TextView(this);hint.setTextSize(13);hint.setText("Pair from the box using a mouse. If mouse buttons fail after updating, forget the phone on the box and pair again.");setup.addView(hint);
-  row(root,key("Back",1,0x29),key("▲",1,0x52),key("Home",2,0x223));
-  row(root,key("◀",1,0x50),key("OK",1,0x28),key("▶",1,0x4F));
-  Button settings=action("Settings",()->{selectMode(true);lg.quickSettings();});
-  ((RemoteButton)settings).icon("settings","LG quick settings; hold for picture mode");
-  settings.setOnLongClickListener(v->{lg.pictureModes();return true;});
-  row(root,settings,key("▼",1,0x51),key("Menu",2,0x40));
-  mouseRow(root);
-  
-  row(root,key("Vol −",2,0xEA),key("Mute",2,0xE2),key("Vol +",2,0xE9));
-  row(root,key("Previous",2,0xB6),key("Play / Pause",2,0xCD),key("Next",2,0xB5));
-  row(root,action("HDMI 1",()->lg.quickHdmi(1)),action("HDMI 2",()->lg.quickHdmi(2)),action("HDMI 3",()->lg.quickHdmi(3)));
-  root.addView(setupToggle,new LinearLayout.LayoutParams(-1,dp(48)));root.addView(setup);
-  lg=new LgRemote(this,outer);lg.setMirrorStatus(tvStatus);root=outer;
+  TextView hint=new TextView(this);hint.setTextSize(13);hint.setText("Pair from the box using a mouse. If mouse buttons fail, forget the phone on the box and pair again.");setup.addView(hint);
+  lg=new LgRemote(this,root);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());
+  selectMode(false);
   TextView updateStatus=new TextView(this);updateStatus.setTextSize(12);root.addView(updateStatus);
   updates=new AppUpdates(this,updateStatus);row(root,action("Check / install update",()->updates.check(true)));
   message("Open Bluetooth setup to connect.");root.postDelayed(()->updates.check(false),1200);
  }
- private void selectMode(boolean tv){bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);}
+ private void selectMode(boolean tv){tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);
+  boxModeButton.setSelected(!tv);tvModeButton.setSelected(tv);boxModeButton.setAlpha(tv?.65f:1f);tvModeButton.setAlpha(tv?1f:.65f);
+  for(Map.Entry<Button,String[]> e:modeLabels.entrySet())e.getKey().setText(e.getValue()[tv?1:0]);
+  for(Map.Entry<Button,String[]> e:modeDescriptions.entrySet())e.getKey().setContentDescription(e.getValue()[tv?1:0]);
+  refreshControls();
+ }
+ private void gap(LinearLayout parent,int height){View v=new View(this);parent.addView(v,new LinearLayout.LayoutParams(-1,dp(height)));}
+ private void refreshControls(){boolean bt=service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer):bt);}}
+ private Button dualAction(String label,Runnable bluetooth,Runnable tv,boolean pointer){Button b=action(label,()->{if(tvMode)tv.run();else bluetooth.run();});controls.add(b);pointerControls.put(b,pointer);b.setEnabled(false);return b;}
+ private Button dual(String label,int report,int usage,String tv,boolean pointer){return dualAction(label,()->send(report,usage),()->lg.remoteAction(tv),pointer);}
+
  @Override protected void onDestroy(){if(lg!=null)lg.destroy();super.onDestroy();}
  private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
  private Button action(String label,Runnable fn){Button b=new RemoteButton(this);b.setText(label);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{fn.run();}catch(RuntimeException e){message("Error: "+e.getMessage());}});return b;}
@@ -70,7 +92,9 @@ public class MainActivity extends Activity {
  private void mouseRow(LinearLayout parent){
   LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
   LinearLayout split=new LinearLayout(this);split.setGravity(Gravity.CENTER_VERTICAL);
-  Button left=key("Left",3,1),right=key("Right",3,2);left.setContentDescription("Left mouse click");right.setContentDescription("Right mouse click");
+  Button left=dual("Left",3,1,"click",true),right=dual("Right",3,2,"EXIT",true);
+  modeLabels.put(left,new String[]{"Left","Click"});modeLabels.put(right,new String[]{"Right","Exit"});
+  modeDescriptions.put(left,new String[]{"Left mouse click","Click TV pointer"});modeDescriptions.put(right,new String[]{"Right mouse click","Exit TV menu"});
   int fg=left.getTextColors().getDefaultColor(),rgb=fg&0x00ffffff;float r=dp(9);
   float[] all={r,r,r,r,r,r,r,r},lc={r,r,0,0,0,0,r,r},rc={0,0,r,r,r,r,0,0};
   android.graphics.drawable.GradientDrawable shell=mouseShape(0x14000000|rgb,all);shell.setStroke(dp(1),0x48000000|rgb);split.setBackground(shell);
@@ -81,16 +105,14 @@ public class MainActivity extends Activity {
   View seam=new View(this);seam.setBackgroundColor(0x55000000|rgb);split.addView(seam,new LinearLayout.LayoutParams(dp(1),dp(28)));
   split.addView(right,new LinearLayout.LayoutParams(0,dp(48),1));
   LinearLayout.LayoutParams group=new LinearLayout.LayoutParams(0,dp(48),2);group.setMargins(dp(4),0,dp(4),0);row.addView(split,group);
-  Button keyboard=connectedAction("Keyboard",()->keyboard());((RemoteButton)keyboard).icon("keyboard","Open keyboard");row.addView(keyboard,new LinearLayout.LayoutParams(0,dp(48),1));parent.addView(row);
+  Button keyboard=dualAction("Keyboard",()->keyboard(),()->lg.keyboard(),false);((RemoteButton)keyboard).icon("keyboard","Open keyboard");row.addView(keyboard,new LinearLayout.LayoutParams(0,dp(48),1));parent.addView(row);
  }
- private Button connectedAction(String label,Runnable r){Button b=action(label,r);b.setEnabled(false);controls.add(b);return b;}
- private Button key(String label,int report,int usage){return connectedAction(label,()->send(report,usage));}
  private void keyboard(){if(service==null||!service.ready())return;EditText entry=new EditText(this);entry.setHint("Type or paste text");entry.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);entry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});
   AlertDialog d=new AlertDialog.Builder(this).setTitle("vSeeBox keyboard").setMessage("Focus a text field on the box first. US keyboard layout. Send types the composed text; OK submits it separately.").setView(entry).setPositiveButton("Send",null).setNeutralButton("Keys",null).setNegativeButton("Cancel",null).create();
   d.setOnShowListener(x->{d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{String[] labels={"Backspace","Space","Tab"};int[] codes={0x2a,0x2c,0x2b};new AlertDialog.Builder(this).setTitle("Send special key").setItems(labels,(dialog,i)->send(1,codes[i])).show();});d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{if(service==null)throw new IllegalStateException("Connect the box first.");service.sendText(entry.getText().toString());d.dismiss();}catch(RuntimeException e){entry.setError(e.getMessage());}});entry.requestFocus();d.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);});d.show();}
 
  private void row(LinearLayout root,Button... buttons){LinearLayout row=new LinearLayout(this);for(Button b:buttons){View v=b==null?new View(this):b;row.addView(v,new LinearLayout.LayoutParams(0,dp(48),1));}root.addView(row);}
- private void message(String s){status.setText(s==null?"Unknown error":s);for(Button b:controls)b.setEnabled(service!=null&&service.ready());}
+ private void message(String s){status.setText(s==null?"Unknown error":s);refreshControls();}
  private boolean permitted(){return Build.VERSION.SDK_INT<31||(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE)==PackageManager.PERMISSION_GRANTED);}
  private boolean ensure(){if(adapter==null){message("Bluetooth hardware unavailable.");return false;}if(!permitted()){requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT,Manifest.permission.BLUETOOTH_ADVERTISE},10);return false;}if(!adapter.isEnabled()){startActivityForResult(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),11);return false;}return true;}
  @Override public void onRequestPermissionsResult(int code,String[] p,int[] g){super.onRequestPermissionsResult(code,p,g);if(code==10){if(permitted())startHid();else message("Nearby devices permission is required.");}}
