@@ -35,28 +35,34 @@ final class LgRemote {
  private volatile String offeredPin="";
  LgRemote(Activity a,LinearLayout parent){activity=a;prefs=a.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);
   panel=new LinearLayout(a);panel.setOrientation(LinearLayout.VERTICAL);parent.addView(panel);panel.setVisibility(View.GONE);
-  status=new TextView(a);status.setPadding(0,dp(10),0,dp(10));panel.addView(status);
-  ip=new EditText(a);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_PHONE);ip.setHint("LG TV IPv4 address");ip.setText(prefs.getString("address","192.168.68.66"));panel.addView(ip);
-  legacy=new CheckBox(a);legacy.setText("Legacy unencrypted Wi-Fi (port 3000)");legacy.setChecked(prefs.getBoolean("legacy",false));panel.addView(legacy);
-  row(action("Connect / pair",()->connect()),action("Disconnect",()->disconnect("Disconnected.")));
-  TextView label=new TextView(a);label.setText("HDMI / external inputs");panel.addView(label);
-  inputs=new Spinner(a);panel.addView(inputs);
-  row(command("Refresh inputs",()->loadInputs()),command("Switch input",()->switchInput()));
-  row(command("Power off",()->new AlertDialog.Builder(activity).setMessage("Turn off the LG TV?").setPositiveButton("Power off",(d,w)->request("system/turnOff",null)).setNegativeButton("Cancel",null).show()),command("Inputs",()->button("INPUT")),command("Home",()->button("HOME")));
-  row(null,command("▲",()->button("UP")),null);row(command("◀",()->button("LEFT")),command("OK",()->button("ENTER")),command("▶",()->button("RIGHT")));row(null,command("▼",()->button("DOWN")),null);
-  row(command("Back",()->button("BACK")),command("Settings",()->button("MENU")),command("Exit",()->button("EXIT")));
-  row(command("Keyboard",()->keyboard()),command("Backspace",()->request("com.webos.service.ime/deleteCharacters",obj("count",1))),command("Enter",()->request("com.webos.service.ime/sendEnterKey",obj())));
+  status=new TextView(a);status.setTextSize(13);status.setPadding(0,dp(4),0,dp(4));panel.addView(status);
+  LinearLayout setup=new LinearLayout(a);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
+  Button setupToggle=action("TV setup ▾",()->{});setupToggle.setOnClickListener(v->{boolean show=setup.getVisibility()!=View.VISIBLE;setup.setVisibility(show?View.VISIBLE:View.GONE);setupToggle.setText(show?"TV setup ▴":"TV setup ▾");});panel.addView(setupToggle,new LinearLayout.LayoutParams(-1,dp(48)));panel.addView(setup);
+  ip=new EditText(a);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_PHONE);ip.setHint("LG TV IPv4 address");ip.setText(prefs.getString("address","192.168.68.66"));setup.addView(ip);
+  legacy=new CheckBox(a);legacy.setText("Legacy unencrypted Wi-Fi (port 3000)");legacy.setChecked(prefs.getBoolean("legacy",false));setup.addView(legacy);
+  rowIn(setup,action("Connect / pair",()->connect()),action("Disconnect",()->disconnect("Disconnected.")));
+  setup.addView(action("Forget TV pairing / certificate",()->new AlertDialog.Builder(activity).setMessage("Forget the saved TV identity and pairing? Only do this if the TV was reset or its certificate changed.").setPositiveButton("Forget",(d,w)->{String s=ip.getText().toString().trim();disconnect("Pairing forgotten. Connect again.");prefs.edit().remove("pin_"+s).remove("key_"+s).remove("key_legacy_"+s).apply();}).setNegativeButton("Cancel",null).show()));
+  TextView hint=new TextView(a);hint.setTextSize(13);hint.setText("Accept pairing on the TV. SIMPLINK depends on attached devices. Standby power-on is not supported.");setup.addView(hint);
+  inputs=new Spinner(a);panel.addView(inputs,new LinearLayout.LayoutParams(-1,dp(48)));
+  row(command("Refresh HDMI",()->loadInputs()),command("Switch input",()->switchInput()));
+  row(command("Back",()->button("BACK")),command("▲",()->button("UP")),command("Home",()->button("HOME")));
+  row(command("◀",()->button("LEFT")),command("OK",()->button("ENTER")),command("▶",()->button("RIGHT")));
+  row(command("Inputs",()->button("INPUT")),command("▼",()->button("DOWN")),command("Settings",()->button("MENU")));
   row(command("Vol −",()->request("audio/volumeDown",null)),command("Mute",()->button("MUTE")),command("Vol +",()->request("audio/volumeUp",null)));
-  row(command("Ch −",()->button("CHANNELDOWN")),command("Ch +",()->button("CHANNELUP")));
-  row(command("Rewind",()->button("REWIND")),command("Play",()->button("PLAY")),command("Pause",()->button("PAUSE")),command("Fast fwd",()->button("FASTFORWARD")));
-  panel.addView(action("Forget TV pairing / certificate",()->new AlertDialog.Builder(activity).setMessage("Forget the saved TV identity and pairing? Only do this if the TV was reset or its certificate changed.").setPositiveButton("Forget",(d,w)->{String s=ip.getText().toString().trim();disconnect("Pairing forgotten. Connect again.");prefs.edit().remove("pin_"+s).remove("key_"+s).remove("key_legacy_"+s).apply();}).setNegativeButton("Cancel",null).show()));
-  TextView hint=new TextView(a);hint.setText("Keep the TV on and the phone on the same Wi-Fi. Accept the connection prompt on the TV. HDMI-CEC forwarding depends on SIMPLINK and the attached device. Power-on from standby is not supported yet.");panel.addView(hint);message("Connect to your LG TV.");
+  row(command("Ch −",()->button("CHANNELDOWN")),command("Exit",()->button("EXIT")),command("Ch +",()->button("CHANNELUP")));
+  row(command("⏪",()->button("REWIND")),command("Play",()->button("PLAY")),command("Pause",()->button("PAUSE")),command("⏩",()->button("FASTFORWARD")));
+  row(command("Keyboard",()->keyboard()),command("Backspace",()->request("com.webos.service.ime/deleteCharacters",obj("count",1))),command("Enter",()->request("com.webos.service.ime/sendEnterKey",obj())));
+  row(command("Power off",()->new AlertDialog.Builder(activity).setMessage("Turn off the LG TV?").setPositiveButton("Power off",(d,w)->request("system/turnOff",null)).setNegativeButton("Cancel",null).show()));
+  ArrayAdapter<String> empty=new ArrayAdapter<>(a,android.R.layout.simple_spinner_dropdown_item,Collections.singletonList("HDMI / external inputs"));inputs.setAdapter(empty);
+  message("Open TV setup to connect.");
+
  }
  void visible(boolean value){panel.setVisibility(value?View.VISIBLE:View.GONE);}
  private int dp(int n){return (int)(activity.getResources().getDisplayMetrics().density*n+.5f);}
- private Button action(String text,Runnable run){Button b=new Button(activity);b.setText(text);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{run.run();}catch(Exception e){message("TV error: "+e.getMessage());}});return b;}
+ private Button action(String text,Runnable run){Button b=new Button(activity);b.setText(text);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{run.run();}catch(Exception e){message("TV error: "+e.getMessage());}});return b;}
  private Button command(String t,Runnable r){Button b=action(t,r);buttons.add(b);b.setEnabled(false);return b;}
- private void row(Button... bs){LinearLayout row=new LinearLayout(activity);for(Button b:bs)row.addView(b==null?new View(activity):b,new LinearLayout.LayoutParams(0,dp(60),1));panel.addView(row);}
+ private void row(Button... bs){rowIn(panel,bs);}
+ private void rowIn(LinearLayout parent,Button... bs){LinearLayout row=new LinearLayout(activity);for(Button b:bs)row.addView(b==null?new View(activity):b,new LinearLayout.LayoutParams(0,dp(48),1));parent.addView(row);}
  private void message(String s){status.setText(s);for(Button b:buttons)b.setEnabled(paired);}
  private static boolean privateIP(String s){String[] parts=s.split("\\.",-1);if(parts.length!=4)return false;int[] p=new int[4];try{for(int i=0;i<4;i++){if(!parts[i].matches("[0-9]{1,3}"))return false;p[i]=Integer.parseInt(parts[i]);if(p[i]>255||!parts[i].equals(Integer.toString(p[i])))return false;}}catch(Exception e){return false;}return p[0]==10||(p[0]==192&&p[1]==168)||(p[0]==172&&p[1]>=16&&p[1]<=31);}
  private boolean current(int g){return !disposed&&g==generation;}

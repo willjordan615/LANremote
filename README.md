@@ -33,3 +33,6 @@ Switch between vSeeBox (existing foreground Bluetooth HID service) and LG TV (lo
 
 ## Keyboard and mouse buttons (0.4.1)
 Bluetooth now advertises a composite keyboard/mouse HID descriptor with unchanged keyboard and media report IDs plus mouse report 3. Back sends a real right click; Esc and left click are available separately. OK still sends Enter. If the box caches the old HID descriptor, remove the phone pairing on the box and phone and pair again. Keyboard opens native text entry; Send types/pastes composed US-layout characters via paced press/release reports. Unsupported characters are rejected before transmission, and the queue is cleared on disconnection. LG mode uses webOS IME insertText, deleteCharacters and sendEnterKey; focus a supported text field first. Live typing is not implemented yet. Hardware verification required.
+
+## Compact remote (0.4.2)
+Back restores the original Escape keyboard report; Right click separately sends mouse button 2. OK and left click retain their existing mappings. Both modes use compact 48 dp button rows and collapsible setup, keeping common controls on the main screen. Scrolling remains available for smaller displays, larger fonts and expanded setup. No Bluetooth descriptor or connection changes in this version.
