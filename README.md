@@ -92,3 +92,6 @@ Start remote session in the normal app while unlocked, then use the device power
 
 ## Collapsible touchpad (0.6.6)
 Touchpad opens and closes in the normal and limited remote-session interfaces, above existing click controls. Single-finger drag sends relative mouse deltas and short tap clicks. Existing Bluetooth HID descriptor is unchanged; encrypted relay adds a bounded three-byte motion command, and LG uses the paired pointer socket. Movement is throttled and stale relay motion is dropped rather than building a queue; both relay phones need the update. LG right button still means Exit, not a native right mouse click. Two-finger scrolling and sensitivity configuration are not included. Physical pointer behavior must be tested.
+
+## Bluetooth mouse delivery diagnostics (0.6.7)
+Relative movement shares the HID input queue, with short pacing and no button release frame for relative movement. One pending motion report is allowed; busy motion is dropped rather than replayed late. Bluetooth setup → Mouse diagnostics on the direct host shows Android accepted/rejected/busy counts and reported HID protocol, with a test cursor button. The existing descriptor is unchanged. If reports are accepted but the box ignores movement, re-pairing may refresh a cached descriptor; hardware verification is still required.

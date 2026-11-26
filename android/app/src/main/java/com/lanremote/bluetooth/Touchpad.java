@@ -17,11 +17,11 @@ final class Touchpad extends LinearLayout {
  private final float density,slop;
  Touchpad(Context c,Motion motion,Runnable click){super(c);this.motion=motion;this.click=click;density=getResources().getDisplayMetrics().density;slop=ViewConfiguration.get(c).getScaledTouchSlop();setOrientation(VERTICAL);
   toggle=new RemoteButton(c);toggle.setAllCaps(false);toggle.setText("Touchpad ▾");addView(toggle,new LayoutParams(-1,RemoteTheme.dp(c,48)));
-  pad=new TextView(c);pad.setText("Drag to move • Tap to click");pad.setTextColor(RemoteTheme.MUTED);pad.setGravity(Gravity.CENTER);pad.setBackground(RemoteTheme.shape(c,RemoteTheme.MUTED_SURFACE,12,RemoteTheme.BORDER));pad.setContentDescription("Mouse touchpad");pad.setVisibility(GONE);LayoutParams lp=new LayoutParams(-1,RemoteTheme.dp(c,156));lp.setMargins(RemoteTheme.dp(c,3),RemoteTheme.dp(c,2),RemoteTheme.dp(c,3),RemoteTheme.dp(c,2));addView(pad,lp);
+  pad=new TextView(c);pad.setText("Drag to move • Tap to click");pad.setTextColor(RemoteTheme.MUTED);pad.setGravity(Gravity.CENTER);pad.setBackground(RemoteTheme.shape(c,RemoteTheme.MUTED_SURFACE,12,RemoteTheme.BORDER));pad.setContentDescription("Mouse touchpad");pad.setVisibility(GONE);pad.setEnabled(false);pad.setText("Connect your device to move the cursor");LayoutParams lp=new LayoutParams(-1,RemoteTheme.dp(c,156));lp.setMargins(RemoteTheme.dp(c,3),RemoteTheme.dp(c,2),RemoteTheme.dp(c,3),RemoteTheme.dp(c,2));addView(pad,lp);
   toggle.setOnClickListener(v->{boolean open=pad.getVisibility()!=VISIBLE;reset();pad.setVisibility(open?VISIBLE:GONE);toggle.setText(open?"Touchpad ▴":"Touchpad ▾");toggle.setSelected(open);});
   pad.setOnTouchListener((v,e)->touch(e));pad.setOnClickListener(v->{if(pad.isEnabled())click.run();});
  }
- void available(boolean ready){pad.setEnabled(ready);pad.setText(ready?"Drag to move • Tap to click":"Connect your device to move the cursor");if(!ready)reset();}
+ void available(boolean ready){if(pad.isEnabled()==ready)return;pad.setEnabled(ready);pad.setText(ready?"Drag to move • Tap to click":"Connect your device to move the cursor");if(!ready)reset();}
  private void reset(){tracking=false;moved=false;dx=dy=0;if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);}
  private void flush(){int x=Math.max(-127,Math.min(127,Math.round(dx))),y=Math.max(-127,Math.min(127,Math.round(dy)));dx=dy=0;if(x!=0||y!=0){motion.move(x,y);lastSent=SystemClock.uptimeMillis();}}
  private boolean touch(MotionEvent e){
