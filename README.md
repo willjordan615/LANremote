@@ -42,3 +42,6 @@ Both modes have HDMI 1–3 and explicit LG TV power on/off choices. HDMI and pow
 
 ## Compact icon controls (0.4.4)
 The header has a shared TV power icon for both modes. vSeeBox mouse buttons share a rounded two-part control with an inset divider and independent left/right click actions. Both modes use scalable drawn keyboard icons with accessibility labels. TV and Bluetooth status remain near the top. Protocol behavior is unchanged.
+
+## Settings shortcut (0.4.5)
+The vacant vSeeBox directional-pad corner now contains a gear icon that expands and scrolls to Bluetooth setup. It remains available while disconnected. The existing Menu command and bottom setup toggle remain unchanged.

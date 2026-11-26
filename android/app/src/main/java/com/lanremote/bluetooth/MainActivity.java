@@ -31,7 +31,7 @@ public class MainActivity extends Activity {
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(10),dp(6),dp(10),dp(6));scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
-  TextView title=new TextView(this);title.setText("LAN Remote • 0.4.4");title.setTextSize(20);header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
+  TextView title=new TextView(this);title.setText("LAN Remote • 0.4.5");title.setTextSize(20);header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
   Button power=action("TV power",()->lg.powerDialog());((RemoteButton)power).icon("power","TV power on or off");header.addView(power,new LinearLayout.LayoutParams(dp(52),dp(48)));
   row(root,action("vSeeBox",()->selectMode(false)),action("LG TV",()->selectMode(true)));
   LinearLayout outer=root;bluetoothPanel=new LinearLayout(this);bluetoothPanel.setOrientation(LinearLayout.VERTICAL);outer.addView(bluetoothPanel);root=bluetoothPanel;
@@ -45,7 +45,12 @@ public class MainActivity extends Activity {
   TextView hint=new TextView(this);hint.setTextSize(13);hint.setText("Pair from the box using a mouse. If mouse buttons fail after updating, forget the phone on the box and pair again.");setup.addView(hint);
   row(root,key("Back",1,0x29),key("▲",1,0x52),key("Home",2,0x223));
   row(root,key("◀",1,0x50),key("OK",1,0x28),key("▶",1,0x4F));
-  row(root,null,key("▼",1,0x51),key("Menu",2,0x40));
+  Button settings=action("Settings",()->{
+   setup.setVisibility(View.VISIBLE);setupToggle.setText("Bluetooth setup ▴");
+   setup.post(()->{android.graphics.Rect bounds=new android.graphics.Rect(0,0,setup.getWidth(),setup.getHeight());setup.requestRectangleOnScreen(bounds,false);});
+  });
+  ((RemoteButton)settings).icon("settings","Open Bluetooth settings");
+  row(root,settings,key("▼",1,0x51),key("Menu",2,0x40));
   mouseRow(root);
   
   row(root,key("Vol −",2,0xEA),key("Mute",2,0xE2),key("Vol +",2,0xE9));
