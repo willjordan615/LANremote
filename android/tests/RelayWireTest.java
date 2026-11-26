@@ -7,6 +7,9 @@ public class RelayWireTest {
   byte[] key=RelayWire.random(32),challenge=RelayWire.random(16);
   RelayWire.Invite invite=new RelayWire.Invite("192.168.1.20",key);
   check(Arrays.equals(key,RelayWire.Invite.parse(invite.encode()).key));
+  check(RelayWire.identity(key).matches("[0-9a-f]{32}"));
+  check(RelayWire.identity(key).equals(RelayWire.identity(invite.key)));
+  check(!RelayWire.identity(key).equals(RelayWire.identity(RelayWire.random(32))));
   check(!RelayWire.privateIP("8.8.8.8"));check(!RelayWire.privateIP("192.168.001.1"));
   byte[] cmd=RelayWire.key(3,1);ByteArrayOutputStream buffer=new ByteArrayOutputStream();
   RelayWire.write(new DataOutputStream(buffer),key,challenge,1,cmd);

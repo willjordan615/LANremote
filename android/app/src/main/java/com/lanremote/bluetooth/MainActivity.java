@@ -15,6 +15,7 @@ public class MainActivity extends Activity {
  private BluetoothAdapter adapter;
  private RemoteService service;
  private RelayGuest guest;
+ private RelayDiscovery.Search relaySearch;
  private String relayInvite="";
  private final Handler relayMain=new Handler(Looper.getMainLooper());
  private boolean bound,started;
@@ -40,7 +41,7 @@ public class MainActivity extends Activity {
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(8),dp(12),dp(8));root.setBackgroundColor(RemoteTheme.BG);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
   LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);root.addView(header);
-  TextView title=new TextView(this);title.setText("LAN Remote • 0.5.0");title.setTextSize(20);title.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
+  TextView title=new TextView(this);title.setText("LAN Remote • 0.5.1");title.setTextSize(20);title.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));header.addView(title,new LinearLayout.LayoutParams(0,dp(48),1));title.setGravity(Gravity.CENTER_VERTICAL);
   Button power=action("TV power",()->lg.powerDialog());((RemoteButton)power).icon("power","TV power on or off");header.addView(power,new LinearLayout.LayoutParams(dp(52),dp(48)));
   boxModeButton=action("vSeeBox",()->selectMode(false));tvModeButton=action("LG TV",()->selectMode(true));row(root,boxModeButton,tvModeButton);
   status=new TextView(this);status.setTextSize(13);RemoteTheme.secondary(status);status.setPadding(0,dp(4),0,dp(4));root.addView(status);
@@ -72,7 +73,7 @@ public class MainActivity extends Activity {
   row(setup,action("Nickname",()->renameSelected()),action("Forget target",()->forgetSelected()));
   gap(setup,8);
   row(setup,action("Share over Wi-Fi",()->shareRelay()),action("Stop sharing",()->{if(service!=null)service.stopRelay();}));
-  row(setup,action("Join Wi-Fi remote",()->joinRelay()),action("Use direct Bluetooth",()->directMode()));
+  row(setup,action("Find / join host",()->findRelay()),action("Use direct Bluetooth",()->directMode()));
   TextView hint=new TextView(this);hint.setTextSize(13);RemoteTheme.secondary(hint);hint.setText("Pair from the box, then select it here. Only your selected device receives commands. Likely TV/computer hosts appear first; other paired devices remain available.");setup.addView(hint);
   lg=new LgRemote(this,root);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());
   selectMode(false);
@@ -129,7 +130,7 @@ public class MainActivity extends Activity {
  @Override protected void onStart(){super.onStart();if(!relayInvite.isEmpty()){startGuest();return;}if(!bound)bound=bindService(new Intent(this,RemoteService.class),serviceConnection,0);}
  @Override protected void onResume(){super.onResume();if(relayInvite.isEmpty()&&service!=null)service.resumeRemote();}
  private void detach(){if(service!=null)service.observe(null);if(bound){unbindService(serviceConnection);bound=false;}service=null;refreshControls();}
- @Override protected void onStop(){stopGuest();detach();super.onStop();}
+ @Override protected void onStop(){stopRelaySearch();stopGuest();detach();super.onStop();}
  private String name(BluetoothDevice d){try{String n=d.getName();return n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  private void discoverable(){if(!ensure())return;if(service==null||!service.registered()){message("Enable the Bluetooth remote first.");return;}Intent i=new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);i.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,300);startActivityForResult(i,12);}
  private String savedTarget(){if(service!=null)return service.lastAddress();android.content.SharedPreferences p=getSharedPreferences("remote",MODE_PRIVATE);return HostIdentity.initial(p.getString("selectedHost",null),p.getString("lastHost",""));}
@@ -143,7 +144,20 @@ public class MainActivity extends Activity {
  private void forgetSelected(){new AlertDialog.Builder(this).setTitle("Forget remote target?").setMessage("This stops sending commands to the selected device, without removing the Android Bluetooth pairing.").setPositiveButton("Forget",(dialog,w)->{if(service!=null)service.forgetTarget();else getSharedPreferences("remote",MODE_PRIVATE).edit().putString("selectedHost","").remove("lastHost").apply();paired.setSelection(0);refresh();message("No target selected.");}).setNegativeButton("Cancel",null).show();}
  private boolean boxReady(){return !relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();}
  private void shareRelay(){if(service==null||!service.ready()){message("Connect directly to the box before sharing.");return;}try{String invitation=service.startRelay();new AlertDialog.Builder(this).setTitle("Wi-Fi remote invitation").setMessage("Give this private invitation only to people you want to control your box. They can paste it under Join Wi-Fi remote. Stop sharing to revoke it.\n\n"+invitation).setPositiveButton("Copy invitation",(dialog,w)->{android.content.ClipboardManager clipboard=getSystemService(android.content.ClipboardManager.class);ClipData clip=ClipData.newPlainText("LANremote invitation",invitation);if(Build.VERSION.SDK_INT>=33){PersistableBundle extras=new PersistableBundle();extras.putBoolean("android.content.extra.IS_SENSITIVE",true);clip.getDescription().setExtras(extras);}clipboard.setPrimaryClip(clip);}).setNegativeButton("Close",null).show();}catch(Exception e){message("Cannot share: "+e.getMessage());}}
- private void joinRelay(){EditText field=new EditText(this);field.setSingleLine(true);field.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);field.setHint("Paste host invitation");new AlertDialog.Builder(this).setTitle("Join Wi-Fi remote").setMessage("The other phone must have Bluetooth connected and Wi-Fi sharing enabled. This phone will stop its direct Bluetooth connection.").setView(field).setPositiveButton("Join",(dialog,w)->{try{RelayWire.Invite invite=RelayWire.Invite.parse(field.getText().toString());relayInvite=invite.encode();getSharedPreferences("remote",MODE_PRIVATE).edit().putString("relayInvite",relayInvite).apply();if(service!=null)service.shutdown();else stopService(new Intent(this,RemoteService.class));detach();startGuest();}catch(RuntimeException e){message("Invalid Wi-Fi invitation.");}}).setNegativeButton("Cancel",null).show();}
+ private void stopRelaySearch(){if(relaySearch!=null){relaySearch.close();relaySearch=null;}}
+ private void findRelay(){stopRelaySearch();message("Finding Wi-Fi remote hosts…");try{
+  relaySearch=new RelayDiscovery.Search(this,relayMain,(hosts,error)->{relaySearch=null;if(isFinishing()||isDestroyed())return;
+   if(hosts.isEmpty()){message(error==null?"No hosts found. Use an invitation or enable sharing on the host.":error);joinRelay(null);return;}
+   String[] names=new String[hosts.size()];for(int k=0;k<names.length;k++){RelayDiscovery.Found h=hosts.get(k);names[k]=h.name+" • "+h.ip;}
+   message("Found "+hosts.size()+" Wi-Fi remote host(s).");new AlertDialog.Builder(this).setTitle("Choose Wi-Fi remote host").setItems(names,(dialog,k)->joinRelay(hosts.get(k))).setNeutralButton("Paste invitation",(dialog,w)->joinRelay(null)).setNegativeButton("Cancel",null).show();
+  });
+ }catch(Exception e){message("Wi-Fi discovery unavailable: "+e.getMessage());joinRelay(null);}}
+ private void joinRelay(RelayDiscovery.Found found){
+  if(found!=null&&!relayInvite.isEmpty())try{RelayWire.Invite existing=RelayWire.Invite.parse(relayInvite);if(RelayWire.identity(existing.key).equals(found.id)){new AlertDialog.Builder(this).setTitle("Reconnect to saved host?").setMessage(found.name+" • "+found.ip).setPositiveButton("Connect",(dialog,w)->useInvitation(new RelayWire.Invite(found.ip,existing.key))).setNegativeButton("Cancel",null).show();return;}}catch(RuntimeException ignored){}
+  EditText field=new EditText(this);field.setSingleLine(true);field.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);field.setHint("Paste host invitation");
+  new AlertDialog.Builder(this).setTitle(found==null?"Join Wi-Fi remote":found.name).setMessage("Paste the private invitation from the host to authorize this phone. Discovery alone cannot grant control. Joining stops this phone's direct Bluetooth connection.").setView(field).setPositiveButton("Join",(dialog,w)->{try{RelayWire.Invite invite=RelayWire.Invite.parse(field.getText().toString());if(found!=null){if(!RelayWire.identity(invite.key).equals(found.id)){message("Invitation does not match the selected host.");return;}invite=new RelayWire.Invite(found.ip,invite.key);}useInvitation(invite);}catch(RuntimeException e){message("Invalid Wi-Fi invitation.");}}).setNegativeButton("Cancel",null).show();
+ }
+ private void useInvitation(RelayWire.Invite invite){relayInvite=invite.encode();getSharedPreferences("remote",MODE_PRIVATE).edit().putString("relayInvite",relayInvite).apply();if(service!=null)service.shutdown();else stopService(new Intent(this,RemoteService.class));detach();startGuest();}
  private void startGuest(){stopGuest();try{guest=new RelayGuest(this,relayMain,RelayWire.Invite.parse(relayInvite),(ready,info)->message(info));message("Connecting to Wi-Fi relay…");}catch(RuntimeException e){message("Invalid invitation. Join again or use direct Bluetooth.");}}
  private void stopGuest(){if(guest!=null){guest.close();guest=null;}}
  private void directMode(){stopGuest();relayInvite="";getSharedPreferences("remote",MODE_PRIVATE).edit().remove("relayInvite").apply();message("Direct Bluetooth selected.");startHid();}
