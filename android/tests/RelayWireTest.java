@@ -7,6 +7,12 @@ public class RelayWireTest {
   byte[] key=RelayWire.random(32),challenge=RelayWire.random(16);
   RelayWire.Invite invite=new RelayWire.Invite("192.168.1.20",key);
   check(Arrays.equals(key,RelayWire.Invite.parse(invite.encode()).key));
+  byte[] guestKey=RelayWire.random(32);RelayWire.Invite guest=new RelayWire.Invite("192.168.1.20",guestKey,invite.hostId);
+  RelayWire.Invite restored=RelayWire.Invite.parse(guest.encode());
+  check(Arrays.equals(guestKey,restored.key));check(restored.hostId.equals(invite.hostId));check(!RelayWire.identity(guestKey).equals(restored.hostId));
+  check(restored.at("192.168.1.21").ip.equals("192.168.1.21"));check(restored.at("192.168.1.21").hostId.equals(invite.hostId));
+  String legacy="LANREMOTE1:192.168.1.20:"+java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key);
+  check(RelayWire.Invite.parse(legacy).hostId.equals(invite.hostId));
   check(RelayWire.identity(key).matches("[0-9a-f]{32}"));
   check(RelayWire.identity(key).equals(RelayWire.identity(invite.key)));
   check(!RelayWire.identity(key).equals(RelayWire.identity(RelayWire.random(32))));
