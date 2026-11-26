@@ -19,6 +19,7 @@ final class LgDiscovery {
   String info=headers.getOrDefault("server","");info=info.replaceAll("[\\p{Cntrl}]","").trim();
   return info.isEmpty()?"LG webOS TV": "LG webOS TV • "+info.substring(0,Math.min(90,info.length()));
  }
+ static boolean sameSubnet(InetAddress a,InetAddress b,int bits){byte[] x=a.getAddress(),y=b.getAddress();if(x.length!=4||y.length!=4||bits<1||bits>32)return false;for(int i=0;i<bits;i++){int mask=1<<(7-i%8);if((x[i/8]&mask)!=(y[i/8]&mask))return false;}return true;}
  static Map<String,String> find(Context context)throws Exception{
   ConnectivityManager cm=context.getSystemService(ConnectivityManager.class);Network wifi=null;LinkProperties lp=null;
   for(Network n:cm.getAllNetworks()){NetworkCapabilities c=cm.getNetworkCapabilities(n);LinkProperties candidate=cm.getLinkProperties(n);if(c!=null&&c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)&&candidate!=null){wifi=n;lp=candidate;break;}}
@@ -31,7 +32,7 @@ final class LgDiscovery {
    long end=SystemClock.elapsedRealtime()+4500;
    while(SystemClock.elapsedRealtime()<end&&found.size()<32){byte[] buffer=new byte[8192];DatagramPacket reply=new DatagramPacket(buffer,buffer.length);try{socket.receive(reply);}catch(SocketTimeoutException e){continue;}
     InetAddress addr=reply.getAddress();if(!(addr instanceof Inet4Address)||!addr.isSiteLocalAddress())continue;
-    boolean local=false;for(LinkAddress link:lp.getLinkAddresses())if(link.getAddress() instanceof Inet4Address&&new IpPrefix(link.getAddress(),link.getPrefixLength()).contains(addr)){local=true;break;}if(!local)continue;
+    boolean local=false;for(LinkAddress link:lp.getLinkAddresses())if(link.getAddress() instanceof Inet4Address&&sameSubnet(link.getAddress(),addr,link.getPrefixLength())){local=true;break;}if(!local)continue;
     String name=label(new String(reply.getData(),0,reply.getLength(),StandardCharsets.UTF_8));if(name!=null)found.put(addr.getHostAddress(),name);
    }
   }return found;

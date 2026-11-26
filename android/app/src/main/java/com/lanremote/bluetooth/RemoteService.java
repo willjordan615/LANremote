@@ -85,7 +85,7 @@ public class RemoteService extends Service {
    else if(state==BluetoothProfile.STATE_CONNECTING&&matches(d)){connecting=true;message("Connecting to "+name(d)+"…");}
    else if(state==BluetoothProfile.STATE_DISCONNECTED){if(d.equals(host)){clearQueue();host=null;}if(switching){switching=false;connecting=false;reconnect();}else if(matches(d)){connecting=false;connectAttempt++;message("Disconnected from "+name(d)+". Return to reconnect.");}}
   }
-  @Override public void onGetReport(BluetoothDevice d,byte type,byte id,int size){if(stopped||hid==null||!matches(d))return;int n=id==1?8:id==2?2:id==3?3:0;if(n>0&&type==BluetoothHidDevice.REPORT_TYPE_INPUT)hid.replyReport(d,type,id,new byte[n]);else hid.reportError(d,BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID);}
+  @Override public void onGetReport(BluetoothDevice d,byte type,byte id,int size){if(stopped||hid==null||(!lastAddress().isEmpty()&&!matches(d)))return;int n=id==1?8:id==2?2:id==3?3:0;if(n>0&&type==BluetoothHidDevice.REPORT_TYPE_INPUT)hid.replyReport(d,type,id,new byte[n]);else hid.reportError(d,BluetoothHidDevice.ERROR_RSP_INVALID_RPT_ID);}
  };
  public String name(BluetoothDevice d){try{String n=d.getName();String nick=nickname(d);return !nick.isEmpty()?nick:n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  public void resumeRemote(){if(stopped)return;if(!registered){enable();return;}reconnect();}
