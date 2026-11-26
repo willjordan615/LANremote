@@ -11,12 +11,17 @@ public class WakeAddressTest {
   check(WakeAddress.choose(target,wired,wifi,"192.168.1.3","192.168.1.4","connected","connected").isEmpty());
   String manual="30:12:34:56:78:90";
   java.util.Map<String,String> all=WakeAddress.candidates(manual,true,wired,wifi);
-  check(new java.util.ArrayList<>(all.keySet()).equals(java.util.Arrays.asList(manual,wifi,wired)));
-  check(WakeAddress.candidates("201234567890",true,wired,wifi).size()==2);
+  check(new java.util.ArrayList<>(all.keySet()).equals(java.util.Arrays.asList(manual)));
+  check(WakeAddress.candidates("201234567890",true,wired,wifi).size()==1);
+  check(WakeAddress.candidates("",true,wired,wifi).isEmpty());
+  check(WakeAddress.candidates(manual,false,wired,wifi).size()==2);
+  check(!WakeAddress.candidates(manual,false,wired,wifi).containsKey(manual));
+  check(WakeAddress.candidates(manual,false,"","").containsKey(manual));
   check(WakeAddress.candidates("",false,wired,wifi).size()==2);
   check(WakeAddress.candidates(manual,true,"","").containsKey(manual));
   check(WakeAddress.candidates("",false,"00:00:00:00:00:00","FF:FF:FF:FF:FF:FF").isEmpty());
-  check(WakeAddress.candidates(wired,false,wired,wifi).get(wired).contains("previously saved"));
+  check(WakeAddress.candidates(wired,false,wired,wifi).get(wired).equals("TV Ethernet"));
+  check(WakeAddress.candidates("",false,wifi,"201234567890").size()==1);
   System.out.println("Wake address selection and multi-address deduplication tests passed");
  }
 }

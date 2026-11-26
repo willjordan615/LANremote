@@ -80,3 +80,6 @@ Power on opens a live diagnostic report; TV setup → Power-on diagnostics shows
 
 ## Multiple TV wake addresses (0.6.2)
 On pairing or power-on setup, store valid wired and wireless addresses separately, even when the active interface cannot be determined. Retain previously learned addresses if a later request is denied or incomplete, and preserve manual overrides. Power on sends three magic packets per unique normalized address, manual first when present, then TV Wi-Fi and Ethernet. Diagnostics list sources and per-address send counts; reachability cannot identify which address woke the TV. This does not query router credentials or infer MACs. Unit tests cover deduplication, ordering, invalid addresses and manual preservation. Older TVs may still require the actual router-reported address manually.
+
+## Manual wake override (0.6.3)
+Manual override is exclusive: only the manually configured MAC is sent. Without it, the paired TV's learned Wi-Fi and Ethernet MACs are both used, deduplicated; an older saved automatic address is used only if neither learned address exists. Manual power-on setup offers Use automatic to clear the override without discarding the two learned addresses. The manual field no longer displays a learned address as if manually entered. Tests cover exclusive override, automatic candidates, missing addresses and migration fallback.

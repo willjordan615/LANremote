@@ -13,9 +13,9 @@ final class WakeAddress {
  }
  static java.util.Map<String,String> candidates(String saved,boolean manual,String wired,String wifi){
   java.util.Map<String,String> result=new java.util.LinkedHashMap<>();
-  if(manual)add(result,saved,"manual");
+  if(manual){add(result,saved,"manual override");return result;}
   add(result,wifi,"TV Wi-Fi");add(result,wired,"TV Ethernet");
-  if(!manual)add(result,saved,"previously saved");
+  if(result.isEmpty())add(result,saved,"previously saved automatic");
   return result;
  }
  private static void add(java.util.Map<String,String> map,String value,String source){
