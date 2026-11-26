@@ -26,7 +26,31 @@ jobs:
           sdkmanager --version
           sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
       - run: gradle -p android :app:assembleDebug
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk LANRemote-Bluetooth.apk
+      - name: Prepare signed APK
+        env:
+          SIGNING_KEY: ${{ secrets.LANREMOTE_SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.LANREMOTE_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          input=android/app/build/outputs/apk/debug/app-debug.apk
+          if [[ -n "$SIGNING_KEY" && -n "$SIGNING_PASSWORD" ]]; then
+            umask 077
+            keystore="$(mktemp)"
+            trap 'rm -f "$keystore"' EXIT
+            printf '%s' "$SIGNING_KEY" | base64 -d > "$keystore"
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign --ks "$keystore" --ks-key-alias lanremote --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD --out LANRemote-Bluetooth.apk "$input"
+            echo "SIGNING_KIND=stable" >> "$GITHUB_ENV"
+          elif [[ -z "$SIGNING_KEY" && -z "$SIGNING_PASSWORD" ]]; then
+            cp "$input" LANRemote-Bluetooth.apk
+            echo "SIGNING_KIND=debug" >> "$GITHUB_ENV"
+          else
+            echo "Both signing secrets must be configured together" >&2
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify LANRemote-Bluetooth.apk
+          code=$(sed -nE 's/.*versionCode ([0-9]+);.*/\1/p' android/app/build.gradle)
+          [[ "$code" =~ ^[0-9]+$ ]]
+          echo "APP_CODE=$code" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
           name: LANRemote-Bluetooth
@@ -34,4 +58,6 @@ jobs:
       - name: Publish installable debug APK
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "Bluetooth prototype build ${GITHUB_RUN_NUMBER}" --notes "Experimental debug APK, Android 9+. Requires compatible Bluetooth HID device support and manual pairing. Future debug builds may require uninstalling this version before installing."
+        run: |
+          printf 'LANREMOTE_VERSION_CODE: %s\nLANREMOTE_SIGNING: %s\n\nAndroid 9+. Bluetooth HID compatibility depends on the phone and TV. Android requires confirmation for updates. Debug builds may require manual reinstall.\n' "$APP_CODE" "$SIGNING_KIND" > release-notes.txt
+          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "Bluetooth prototype build ${GITHUB_RUN_NUMBER}" --notes-file release-notes.txt

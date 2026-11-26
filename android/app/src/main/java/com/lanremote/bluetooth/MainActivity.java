@@ -19,6 +19,7 @@ public class MainActivity extends Activity {
   @Override public void onServiceDisconnected(ComponentName n){service=null;message("Bluetooth service disconnected. Tap Enable.");}
  };
  private TextView status;
+ private AppUpdates updates;
  private Spinner paired;
  private final ArrayList<BluetoothDevice> devices=new ArrayList<>();
  private final ArrayList<Button> controls=new ArrayList<>();
@@ -26,7 +27,7 @@ public class MainActivity extends Activity {
   getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(16),dp(18),dp(16),dp(18));scroll.addView(root);setContentView(scroll);
-  TextView title=new TextView(this);title.setText("LAN Remote • Bluetooth 0.3.1");title.setTextSize(24);root.addView(title);
+  TextView title=new TextView(this);title.setText("LAN Remote • Bluetooth 0.3.2");title.setTextSize(24);root.addView(title);
   status=new TextView(this);status.setTextSize(16);status.setPadding(0,dp(10),0,dp(10));root.addView(status);
   root.addView(action("1. Enable Bluetooth remote",()->startHid()));
   root.addView(action("2. Make phone discoverable",()->discoverable()));
@@ -37,7 +38,7 @@ public class MainActivity extends Activity {
   row(root,key("Back / Esc",1,0x29),key("Home",2,0x223),key("Menu",2,0x40));
   row(root,key("Vol −",2,0xEA),key("Mute",2,0xE2),key("Vol +",2,0xE9));
   row(root,key("Previous",2,0xB6),key("Play / Pause",2,0xCD),key("Next",2,0xB5));
-  TextView hint=new TextView(this);hint.setText("The remote can stay active while you switch apps. Use Stop Bluetooth remote to disconnect. On the TV box, use a mouse to open Bluetooth settings, search for this phone, and pair. Arrow keys and Enter are the first compatibility test. Home, Back and media mappings vary by device.");root.addView(hint);message("Tap Enable Bluetooth remote to start.");
+  TextView hint=new TextView(this);hint.setText("The remote can stay active while you switch apps. Use Stop Bluetooth remote to disconnect. On the TV box, use a mouse to open Bluetooth settings, search for this phone, and pair. Arrow keys and Enter are the first compatibility test. Home, Back and media mappings vary by device.");root.addView(hint);TextView updateStatus=new TextView(this);root.addView(updateStatus);updates=new AppUpdates(this,updateStatus);root.addView(action("Check / install update",()->updates.check(true)));message("Tap Enable Bluetooth remote to start.");root.postDelayed(()->updates.check(false),1200);
  }
  private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
  private Button action(String label,Runnable fn){Button b=new Button(this);b.setText(label);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{fn.run();}catch(RuntimeException e){message("Error: "+e.getMessage());}});return b;}
