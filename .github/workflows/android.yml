@@ -25,6 +25,11 @@ jobs:
         run: |
           sdkmanager --version
           sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Verify HID keyboard and mouse mappings
+        run: |
+          mkdir -p /tmp/lanremote-hid-test
+          javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/HidKeys.java android/tests/HidKeysTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.HidKeysTest
       - run: gradle -p android :app:assembleDebug
       - name: Prepare signed APK
         env:
