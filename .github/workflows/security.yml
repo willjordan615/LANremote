@@ -25,7 +25,7 @@ jobs:
       - run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
       - run: gradle -p android :app:exportRuntimeDependencies
       - run: python3 .github/scripts/audit_dependencies.py android/app/build/reports/runtime-dependencies.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dependency-audit
