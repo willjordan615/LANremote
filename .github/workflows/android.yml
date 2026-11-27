@@ -40,6 +40,8 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.TvProfileTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/TvRecoveryPolicy.java android/tests/TvRecoveryPolicyTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.TvRecoveryPolicyTest
+          javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/TvAudioPolicy.java android/tests/TvAudioPolicyTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.TvAudioPolicyTest
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RokuKeys.java android/tests/RokuKeysTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RokuKeysTest
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/AtvWire.java android/tests/AtvWireTest.java

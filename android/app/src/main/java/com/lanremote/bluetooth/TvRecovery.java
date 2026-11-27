@@ -42,7 +42,7 @@ final class TvRecovery {
   for(TvProfile other:profiles.all())if(!other.id.equals(old.id)&&other.platform==old.platform&&other.ip.equals(address))return false;
   SharedPreferences prefs=c.getSharedPreferences(store(old.platform),Context.MODE_PRIVATE);String existing=prefs.getString("pin_"+address,"");if(!existing.isEmpty()&&!existing.equals(expected))return false;
   String[] strings=old.platform==TvPlatform.LG?new String[]{"pin_","key_","nickname_","device_name_","wake_mac_","wake_wired_","wake_wifi_"}:old.platform==TvPlatform.SAMSUNG?new String[]{"pin_","token_"}:new String[]{"pin_"};
-  String[] bools=old.platform==TvPlatform.LG?new String[]{"wake_manual_","paused_","transport_legacy_"}:new String[0];
+  String[] bools=old.platform==TvPlatform.LG?new String[]{"wake_manual_","paused_","transport_legacy_","cec_volume_"}:new String[0];
   // Refuse to replace a conflicting preexisting credential even if it has no profile.
   for(String prefix:strings)if((prefix.equals("key_")||prefix.equals("token_"))&&prefs.contains(prefix+address)&&!prefs.getString(prefix+address,"").equals(prefs.getString(prefix+old.ip,"")))return false;
   SharedPreferences.Editor e=prefs.edit();for(String prefix:strings)if(prefs.contains(prefix+old.ip))e.putString(prefix+address,prefs.getString(prefix+old.ip,""));for(String prefix:bools)if(prefs.contains(prefix+old.ip))e.putBoolean(prefix+address,prefs.getBoolean(prefix+old.ip,false));if(!e.commit())return false;

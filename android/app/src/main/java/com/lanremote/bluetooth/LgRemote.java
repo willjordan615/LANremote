@@ -69,6 +69,8 @@ final class LgRemote {
   if(!managedTarget)setup.addView(action("Find LG TVs on Wi-Fi",()->discover()));
   if(!managedTarget)setup.addView(action("TV nickname",()->renameTv()));
   CheckBox autoKeyboard=new CheckBox(a);autoKeyboard.setText("Automatically open phone keyboard for TV text fields");autoKeyboard.setChecked(prefs.getBoolean("auto_keyboard",true));autoKeyboard.setOnCheckedChangeListener((b,on)->prefs.edit().putBoolean("auto_keyboard",on).apply());setup.addView(autoKeyboard);
+  CheckBox cecVolume=new CheckBox(a);cecVolume.setText("Use TV remote volume keys (HDMI-CEC audio)");cecVolume.setChecked(cecVolumeKeys());cecVolume.setOnCheckedChangeListener((b,on)->{String targetIp=ip.getText().toString().trim();if(privateIP(targetIp)){prefs.edit().putBoolean("cec_volume_"+targetIp,on).apply();if(observer!=null)observer.run();}});setup.addView(cecVolume);
+  TextView cecHint=new TextView(a);cecHint.setText("Optional: try this if ordinary volume commands do not reach your HDMI-CEC soundbar or receiver. Enable SIMPLINK and select HDMI ARC/eARC audio on the TV.");cecHint.setTextSize(12);RemoteTheme.secondary(cecHint);setup.addView(cecHint);
   wakeStatus=new TextView(a);wakeStatus.setTextSize(13);RemoteTheme.secondary(wakeStatus);setup.addView(wakeStatus);
   setup.addView(action("Set up TV power on",()->{if(paired&&address.equals(ip.getText().toString().trim()))learnWakeAddress();else connect();}));
   wakeAdvanced=new LinearLayout(a);wakeAdvanced.setOrientation(LinearLayout.VERTICAL);wakeAdvanced.setVisibility(View.GONE);
@@ -105,10 +107,12 @@ final class LgRemote {
  void closeLiveKeyboard(){liveKeyboard.close();}
  private void keyboardFocus(JSONObject p){JSONObject widget=p==null?null:p.optJSONObject("currentWidget");if(widget==null)return;boolean focused=widget.optBoolean("focus",false)&&widget.has("hiddenText")&&!widget.optBoolean("hiddenText",true)&&!"password".equalsIgnoreCase(widget.optString("contentType"));boolean rising=focused&&!keyboardFocused;keyboardFocused=focused;if(!focused)liveKeyboard.closeAutomatic();else if(rising&&prefs.getBoolean("auto_keyboard",true)&&keyboardFocusObserver!=null)keyboardFocusObserver.run();}
  private void subscribeKeyboard(){if(sessionOnly||!paired||control==null)return;keyboardSubscription="req"+(++seq);if(!control.send(obj("type","subscribe","id",keyboardSubscription,"uri","ssap://com.webos.service.ime/registerRemoteKeyboard","payload",obj("subscribe",true)).toString()))keyboardSubscription="";}
+ private boolean cecVolumeKeys(){return prefs.getBoolean("cec_volume_"+ip.getText().toString().trim(),false);}
+ boolean readyFor(String action,boolean needPointer){return ready(TvProfile.volumeAction(action)?TvAudioPolicy.lgNeedsPointer(action,cecVolumeKeys()):needPointer);}
  boolean ready(boolean needPointer){return paired&&(!needPointer||pointerReady);}
  void movePointer(int x,int y){if(!ready(true)||pointer==null||!RelayWire.validMovement(x,y))return;if(pointer.queueSize()>4096)return;if(!pointer.send("type:move\ndx:"+x+"\ndy:"+y+"\ndown:0\n\n"))message("TV pointer unavailable.");}
  void remoteAction(String command){
-  if("volumeDown".equals(command)||"volumeUp".equals(command)){request("audio/"+command,null);return;}
+  if(TvProfile.volumeAction(command)){String key=TvAudioPolicy.lgKey(command,cecVolumeKeys());if(!key.isEmpty())button(key);else request("audio/"+command,null);return;}
   if("playPause".equals(command)){new AlertDialog.Builder(activity).setTitle("TV playback").setItems(new String[]{"Play","Pause"},(d,i)->button(i==0?"PLAY":"PAUSE")).setNegativeButton("Cancel",null).show();return;}
   if("click".equals(command)){if(!pointerReady||pointer==null){message("TV pointer not ready.");return;}if(!pointer.send("type:click\n\n"))message("TV pointer unavailable.");return;}
   button(command);

@@ -60,6 +60,7 @@ final class TvRemote {
  void sessionWake(){if(lg!=null)lg.sessionWake();}
  void sessionOff(){if(lg!=null)lg.sessionOff();else if(samsung!=null)samsung.action("powerOff");else if(roku!=null)roku.action("powerOff");else if(androidTv!=null)androidTv.action("powerOff");else if(sony!=null)sony.action("powerOff");}
  boolean ready(boolean pointer){return lg!=null?lg.ready(pointer):samsung!=null&&samsung.ready()||roku!=null&&roku.ready()||androidTv!=null&&androidTv.ready()||sony!=null&&sony.ready();}
+ boolean readyFor(String action,boolean pointer){return lg!=null?lg.readyFor(action,pointer):ready(pointer);}
  boolean supports(String action){if(platform==TvPlatform.LG)return true;if(platform==TvPlatform.ROKU)return roku!=null&&roku.supports(action);if(platform==TvPlatform.ANDROID)return androidTv!=null&&androidTv.supports(action);if(platform==TvPlatform.SONY)return sony!=null&&sony.supports(action);if(platform==TvPlatform.SAMSUNG)return "playPause".equals(action)||!TvPlatform.samsungKey(action).isEmpty();return false;}
  boolean pointerAvailable(){return lg!=null&&lg.ready(true);}
  void movePointer(int x,int y){if(lg!=null)lg.movePointer(x,y);}
