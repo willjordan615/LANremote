@@ -27,7 +27,7 @@ final class LgRemote {
  private TextView mirrorStatus;
  private Runnable observer,keyboardFocusObserver;
  private final LiveKeyboard liveKeyboard;
- private String keyboardSubscription="";private boolean keyboardFocused;
+ private String keyboardSubscription="";private boolean keyboardFocused,suspended;
  private String pendingInput="";
  private boolean discovering;
  private boolean pendingOff=false;
@@ -182,16 +182,18 @@ final class LgRemote {
  private void post(int g,Runnable r){main.post(()->{if(current(g))r.run();});}
  private static String fingerprint(X509Certificate cert)throws CertificateException{try{byte[] bytes=MessageDigest.getInstance("SHA-256").digest(cert.getEncoded());StringBuilder out=new StringBuilder();for(byte b:bytes)out.append(String.format(Locale.ROOT,"%02X",b&255));return out.toString();}catch(GeneralSecurityException e){throw new CertificateException(e);}}
  private OkHttpClient makeClient(boolean plain,String expected,String target)throws Exception{
-  OkHttpClient.Builder b=new OkHttpClient.Builder().connectTimeout(7,TimeUnit.SECONDS).readTimeout(0,TimeUnit.SECONDS).pingInterval(20,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).proxy(Proxy.NO_PROXY);
+  OkHttpClient.Builder b=new OkHttpClient.Builder().connectTimeout(7,TimeUnit.SECONDS).readTimeout(0,TimeUnit.SECONDS).pingInterval(45,TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).proxy(Proxy.NO_PROXY);
   if(!plain){X509TrustManager tm=new X509TrustManager(){public X509Certificate[] getAcceptedIssuers(){return new X509Certificate[0];}public void checkClientTrusted(X509Certificate[] c,String s)throws CertificateException{throw new CertificateException("Client trust not supported");}public void checkServerTrusted(X509Certificate[] chain,String s)throws CertificateException{if(chain==null||chain.length==0)throw new CertificateException("No TV certificate");String actual=fingerprint(chain[0]);if(expected.isEmpty()){offeredPin=actual;throw new CertificateException("TV identity needs approval");}if(!actual.equals(expected))throw new CertificateException("TV certificate changed");}};
    SSLContext tls=SSLContext.getInstance("TLS");tls.init(null,new TrustManager[]{tm},new SecureRandom());b.sslSocketFactory(tls.getSocketFactory(),tm).hostnameVerifier((host,session)->host.equals(target)&&!expected.isEmpty());
   }return b.build();
  }
- void restoreSaved(){if(disposed||sessionOnly||connecting||paired||prefs.getBoolean("tv_reconnect_paused",false)||!sessionConfigured())return;String target=ip.getText().toString().trim();if(!target.equals(prefs.getString("last_connected_address",prefs.getString("address",""))))return;savedOnly=true;open(target,legacy.isChecked());}
- void connect(){if(disposed)return;if(!sessionOnly){savedOnly=false;prefs.edit().putBoolean("tv_reconnect_paused",false).apply();}if(sessionOnly){if(connecting||paired)return;if(!sessionConfigured()){message("Unlock to pair or configure the TV.");return;}}String target=ip.getText().toString().trim();if(!privateIP(target)){pendingInput="";pendingOff=false;pendingSettings="";message("Enter the private IPv4 address of your LG TV.");return;}
+ void resumeForeground(){suspended=false;if(sessionOnly){if(sessionConfigured()&&!prefs.getBoolean("tv_reconnect_paused",false))connect();}else restoreSaved();}
+ void suspendForeground(){suspended=true;if(paired||connecting||control!=null||pointer!=null)disconnect("TV connection resting • reconnects when remote opens.");else liveKeyboard.close();}
+ void restoreSaved(){if(disposed||suspended||sessionOnly||connecting||paired||prefs.getBoolean("tv_reconnect_paused",false)||!sessionConfigured())return;String target=ip.getText().toString().trim();if(!target.equals(prefs.getString("last_connected_address",prefs.getString("address",""))))return;savedOnly=true;open(target,legacy.isChecked());}
+ void connect(){if(disposed||suspended)return;if(!sessionOnly){savedOnly=false;prefs.edit().putBoolean("tv_reconnect_paused",false).apply();}if(sessionOnly){if(connecting||paired)return;if(!sessionConfigured()){message("Unlock to pair or configure the TV.");return;}}String target=ip.getText().toString().trim();if(!privateIP(target)){pendingInput="";pendingOff=false;pendingSettings="";message("Enter the private IPv4 address of your LG TV.");return;}
   boolean plain=legacy.isChecked();if(plain&&!prefs.getBoolean("legacy_"+target,false)){new AlertDialog.Builder(activity).setTitle("Unencrypted connection").setMessage("Older LG TVs may require unencrypted local Wi-Fi. Only use on a trusted home network. Pairing credentials and commands are not encrypted.").setPositiveButton("Use legacy mode",(d,w)->{prefs.edit().putBoolean("legacy_"+target,true).apply();open(target,true);}).setNegativeButton("Cancel",(d,w)->{pendingInput="";pendingOff=false;pendingSettings="";}).setOnCancelListener(d->{pendingInput="";pendingOff=false;pendingSettings="";}).show();return;}open(target,plain);
  }
- private void open(String target,boolean plain){String queued=pendingInput;boolean off=pendingOff;String settings=pendingSettings;disconnect("Connecting…");pendingInput=queued;pendingOff=off;pendingSettings=settings;address=target;pin=prefs.getString("pin_"+target,"");offeredPin="";connecting=true;prefs.edit().putString("address",target).putBoolean("legacy",plain).apply();final int g=generation;final String expected=pin;
+ private void open(String target,boolean plain){if(disposed||suspended)return;String queued=pendingInput;boolean off=pendingOff;String settings=pendingSettings;disconnect("Connecting…");pendingInput=queued;pendingOff=off;pendingSettings=settings;address=target;pin=prefs.getString("pin_"+target,"");offeredPin="";connecting=true;prefs.edit().putString("address",target).putBoolean("legacy",plain).apply();final int g=generation;final String expected=pin;
   try{client=makeClient(plain,expected,target);String url=(plain?"ws://":"wss://")+target+(plain?":3000":":3001");control=client.newWebSocket(new Request.Builder().url(url).build(),new WebSocketListener(){
    @Override public void onOpen(WebSocket ws,Response response){post(g,()->register(ws,plain));}
    @Override public void onMessage(WebSocket ws,String text){post(g,()->receive(text,plain,g));}

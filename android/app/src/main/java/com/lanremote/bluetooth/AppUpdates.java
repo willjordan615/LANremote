@@ -30,6 +30,7 @@ final class AppUpdates {
  void check(boolean manual){
   if(checking)return;
   if(prefs.getLong("download",-1)>=0){try{if(prefs.getLong("version",-1)<=version())clear(prefs.getLong("download",-1));}catch(Exception e){show("Update state: "+e.getMessage());return;}if(prefs.getLong("download",-1)>=0){if(manual)installOrStatus();else show("Update download saved. Tap Check / install update.");return;}}
+  if(!manual){try{long installed=version();long now=System.currentTimeMillis();long last=prefs.getLong("auto_check_time",0);if(prefs.getLong("auto_check_build",-1)==installed&&now>=last&&now-last<IdlePolicy.UPDATE_INTERVAL){show(prefs.getString("auto_check_status","Automatic update check recently completed."));return;}prefs.edit().putLong("auto_check_time",now).putLong("auto_check_build",installed).putString("auto_check_status","Automatic update check recently attempted.").apply();}catch(Exception e){show("Update state: "+e.getMessage());return;}}
   checking=true;show("Checking GitHub for updates…");
   new Thread(()->{
    HttpURLConnection c=null;
@@ -44,7 +45,7 @@ final class AppUpdates {
     String url=null;JSONArray assets=release.getJSONArray("assets");for(int i=0;i<assets.length();i++){JSONObject a=assets.getJSONObject(i);if(a.optString("name").equals("LANRemote-Bluetooth.apk")&&a.optLong("size",0)>0&&a.optLong("size",0)<=10_000_000)url=a.optString("browser_download_url");}
     if(url==null||!url.startsWith(PREFIX)||!url.endsWith("/LANRemote-Bluetooth.apk"))throw new IOException("No trusted APK asset found");
     final String asset=url;final long installed=version();
-    activity.runOnUiThread(()->{checking=false;if(!alive())return;if(next<=installed){show("App is up to date.");return;}show("Update available (build "+next+").");if(activity.hasWindowFocus()||manual)new AlertDialog.Builder(activity).setTitle("LAN Remote update available").setMessage("Download the new version from our GitHub release? Android will ask you to approve installation."+(signing.equals("debug")?" This experimental build may use a different signing key and require a manual reinstall.":"")).setPositiveButton("Download",(d,w)->download(asset,next)).setNegativeButton("Later",null).show();});
+    activity.runOnUiThread(()->{checking=false;if(!alive())return;prefs.edit().putLong("auto_check_time",System.currentTimeMillis()).putLong("auto_check_build",installed).putString("auto_check_status",next<=installed?"App is up to date.":"Update available (build "+next+").").apply();if(next<=installed){show("App is up to date.");return;}show("Update available (build "+next+").");if(activity.hasWindowFocus()||manual)new AlertDialog.Builder(activity).setTitle("LAN Remote update available").setMessage("Download the new version from our GitHub release? Android will ask you to approve installation."+(signing.equals("debug")?" This experimental build may use a different signing key and require a manual reinstall.":"")).setPositiveButton("Download",(d,w)->download(asset,next)).setNegativeButton("Later",null).show();});
    }catch(Exception e){activity.runOnUiThread(()->{checking=false;if(alive())show("Update check: "+e.getMessage());});}finally{if(c!=null)c.disconnect();}
   },"lanremote-update-check").start();
  }

@@ -13,7 +13,9 @@ final class RelayGuest implements AutoCloseable {
  private final java.util.concurrent.atomic.AtomicBoolean motionPending=new java.util.concurrent.atomic.AtomicBoolean();
  private final java.util.concurrent.atomic.AtomicBoolean repeatPending=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean closed;private boolean ready;private volatile Socket active;
- private final Runnable poll=new Runnable(){public void run(){if(closed)return;submit(new byte[]{0});main.postDelayed(this,4000);}};
+ private long lastResult;private int failures;private String lastStatus="";private boolean polling;
+ private final Runnable poll=new Runnable(){public void run(){if(closed)return;long interval=IdlePolicy.relayDelay(ready,failures);long age=android.os.SystemClock.elapsedRealtime()-lastResult;if(lastResult!=0&&age<interval){main.postDelayed(this,interval-age);return;}if(polling||worker.getActiveCount()>0||!worker.getQueue().isEmpty()){main.postDelayed(this,1000);return;}polling=true;try{worker.execute(()->{try{exchange(new byte[]{0});}finally{main.post(()->{polling=false;if(!closed)schedulePoll();});}});}catch(RejectedExecutionException e){polling=false;schedulePoll();}}};
+ private void schedulePoll(){main.removeCallbacks(poll);if(!closed)main.postDelayed(poll,IdlePolicy.relayDelay(ready,failures));}
  RelayGuest(Context context,Handler main,RelayWire.Invite invite,Observer observer){this.context=context.getApplicationContext();this.main=main;this.invite=invite;this.observer=observer;main.post(poll);}
  boolean ready(){return ready&&!closed;}
  void submit(byte[] command){if(closed)return;try{worker.execute(()->exchange(command));}catch(RejectedExecutionException e){observer.update(ready,"Wi-Fi relay queue full. Try again.");}}
@@ -26,6 +28,6 @@ final class RelayGuest implements AutoCloseable {
    if(reply.length!=1)throw new IOException("Invalid response");if(reply[0]==0)report(true,"Wi-Fi relay connected");else if(reply[0]==1)report(false,"Relay host has no Bluetooth connection.");else if(command[0]!=3)report(true,"Relay input busy or rejected. Try again.");else report(true,"Relay mouse report rejected or busy; check host mouse diagnostics.");
   }finally{active=null;}
  }catch(Exception e){report(false,"Wi-Fi relay unavailable. Check host, invitation and Wi-Fi.");}}
- private void report(boolean connected,String status){main.post(()->{if(closed)return;ready=connected;observer.update(ready,status);});}
+ private void report(boolean connected,String status){main.post(()->{if(closed)return;boolean changed=ready!=connected||!lastStatus.equals(status);ready=connected;lastStatus=status;lastResult=android.os.SystemClock.elapsedRealtime();failures=connected?0:Math.min(10,failures+1);if(changed||!connected)observer.update(ready,status);schedulePoll();});}
  @Override public void close(){closed=true;ready=false;main.removeCallbacks(poll);worker.shutdownNow();Socket s=active;if(s!=null)try{s.close();}catch(IOException ignored){}}
 }

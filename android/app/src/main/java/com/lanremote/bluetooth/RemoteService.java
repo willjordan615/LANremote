@@ -27,7 +27,7 @@ public class RemoteService extends Service {
  private String status="Starting Bluetooth remote…";
  private final Handler handler=new Handler(Looper.getMainLooper());
  private final LocalBinder binder=new LocalBinder();
- private Runnable observer;
+ private Runnable observer,sessionObserver;
  private static final String CHANNEL="remote", STOP="com.lanremote.bluetooth.STOP";
  private static final byte[] DESC = bytes(
   0x05,0x01,0x09,0x06,0xA1,0x01,0x85,0x01,
@@ -56,8 +56,9 @@ public class RemoteService extends Service {
   PendingIntent stop=PendingIntent.getService(this,1,new Intent(this,RemoteService.class).setAction(STOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
   return new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.stat_sys_data_bluetooth).setContentTitle("LAN Remote Bluetooth").setContentText(status).setContentIntent(open).addAction(new Notification.Action.Builder(null,"Disconnect",stop).build()).setOngoing(true).build();
  }
- private void message(String text){status=text;if(!stopped){try{getSystemService(NotificationManager.class).notify(1,notification());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();}
+ private void message(String text){status=text;if(!stopped){try{getSystemService(NotificationManager.class).notify(1,notification());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();if(sessionObserver!=null)sessionObserver.run();}
  public void observe(Runnable value){observer=value;if(value!=null)value.run();}
+ public void observeSession(Runnable value){sessionObserver=value;if(value!=null)value.run();}
  public String status(){return status+(relay!=null?" • Wi-Fi sharing on":"");}
  public boolean ready(){return host!=null&&registered&&matches(host);}
  public boolean registered(){return registered;}
@@ -114,7 +115,7 @@ public class RemoteService extends Service {
   }catch(RuntimeException e){connecting=false;switching=false;message("Connect failed: "+e.getMessage());}}
  public String startRelay()throws Exception{if(!ready()||stopped)throw new IllegalStateException("Connect Bluetooth first.");if(relay==null){relay=new RelayHost(this,handler,this::receiveRelay,name(host),this::pairingChanged,permissions());remotePrefs().edit().putBoolean(sharePref(),true).apply();message("Connected: "+name(host));}return relay.invitation();}
  public RelayPairHost.Request pendingPairing(){return pairingRequest;}
- private void pairingChanged(RelayPairHost.Request request){if(request!=null&&(relay==null||!ready()||stopped)){request.decide(false);return;}pairingRequest=request;NotificationManager nm=getSystemService(NotificationManager.class);if(request==null)nm.cancel(PAIR_NOTICE);else{try{PendingIntent open=PendingIntent.getActivity(this,2,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);nm.notify(PAIR_NOTICE,new Notification.Builder(this,"relay_approval").setSmallIcon(android.R.drawable.stat_sys_data_bluetooth).setContentTitle("LANremote connection request").setContentText("Open LANremote to compare the code and approve.").setContentIntent(open).setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).build());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();}
+ private void pairingChanged(RelayPairHost.Request request){if(request!=null&&(relay==null||!ready()||stopped)){request.decide(false);return;}pairingRequest=request;NotificationManager nm=getSystemService(NotificationManager.class);if(request==null)nm.cancel(PAIR_NOTICE);else{try{PendingIntent open=PendingIntent.getActivity(this,2,new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);nm.notify(PAIR_NOTICE,new Notification.Builder(this,"relay_approval").setSmallIcon(android.R.drawable.stat_sys_data_bluetooth).setContentTitle("LANremote connection request").setContentText("Open LANremote to compare the code and approve.").setContentIntent(open).setVisibility(Notification.VISIBILITY_PRIVATE).setAutoCancel(true).build());}catch(RuntimeException ignored){}}if(observer!=null)observer.run();if(sessionObserver!=null)sessionObserver.run();}
  public void decidePairing(RelayPairHost.Request request,boolean yes){if(request!=null&&request==pairingRequest){request.decide(yes&&ready()&&relay!=null);pairingChanged(null);}}
  public java.util.Map<String,String> approvedGuests(){return permissions().guests();}
  public void revokeGuest(String id){permissions().revoke(id);}
@@ -136,5 +137,5 @@ public class RemoteService extends Service {
   handler.postDelayed(()->{if(generation!=sendGeneration||stopped||!target.equals(host))return;try{if(!proxy.sendReport(target,r.id,new byte[r.data.length])){if(r.id==3)clickRejected++;clearQueue();message("Input release rejected. Reconnect the box.");return;}}catch(RuntimeException e){clearQueue();message("Input release failed: "+e.getMessage());return;}handler.postDelayed(()->{if(generation!=sendGeneration)return;sending=false;pump();},15);},35);
  }catch(RuntimeException e){if(r.motion){mouseRejected++;mouseError=e.getClass().getSimpleName();}clearQueue();message("Input failed: "+e.getMessage());}}
  public void shutdown(){if(stopped)return;stopped=true;pauseRelay();releaseOld();clearQueue();connectAttempt++;switching=false;handler.removeCallbacksAndMessages(null);BluetoothHidDevice p=hid;hid=null;host=null;registered=false;requesting=false;connecting=false;sending=false;if(p!=null){try{p.unregisterApp();}catch(RuntimeException ignored){}try{adapter.closeProfileProxy(BluetoothProfile.HID_DEVICE,p);}catch(RuntimeException ignored){}}message("Remote stopped. Tap Enable to start.");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
- @Override public void onDestroy(){shutdown();observer=null;super.onDestroy();}
+ @Override public void onDestroy(){shutdown();observer=null;sessionObserver=null;super.onDestroy();}
 }

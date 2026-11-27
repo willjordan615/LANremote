@@ -46,7 +46,7 @@ public class MainActivity extends Activity {
  private final ArrayList<BluetoothDevice> devices=new ArrayList<>();
  private final ArrayList<Button> controls=new ArrayList<>();
  @Override public void onCreate(Bundle saved){super.onCreate(saved);
-  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+  applyScreenPreference();
   relayInvite=getSharedPreferences("remote",MODE_PRIVATE).getString("relayInvite","");
   BluetoothManager manager=getSystemService(BluetoothManager.class);adapter=manager==null?null:manager.getAdapter();
   ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(12),dp(8),dp(12),dp(8));root.setBackgroundColor(RemoteTheme.BG);scroll.setFillViewport(true);scroll.addView(root);setContentView(scroll);
@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
   paired=new Spinner(this);setup.addView(paired,new LinearLayout.LayoutParams(-1,dp(48)));
   row(setup,action("Refresh",()->refresh()),action("Select / connect",()->connectSelected()),action("Stop",()->{pauseBox(true);relayMain.removeCallbacks(startupDiscovery);stopRelaySearch();stopRecovery();stopGuest();if(service!=null)service.shutdown();detach();started=false;message("Remote stopped. Open setup to enable.");}));
   CheckBox haptics=new CheckBox(this);haptics.setText("Button haptic feedback");haptics.setChecked(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("haptics",true));haptics.setOnCheckedChangeListener((b,on)->getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("haptics",on).apply());setup.addView(haptics);
+  CheckBox keepScreen=new CheckBox(this);keepScreen.setText("Keep screen awake while remote is open");keepScreen.setChecked(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("keep_screen_on",false));keepScreen.setOnCheckedChangeListener((b,on)->{getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("keep_screen_on",on).apply();applyScreenPreference();});setup.addView(keepScreen);
   row(setup,action("Mouse diagnostics",()->mouseDiagnostics()));
   CheckBox cursorTrial=new CheckBox(this);cursorTrial.setText("Enable Bluetooth mouse cursor");cursorTrial.setChecked(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true));cursorTrial.setOnCheckedChangeListener((b,on)->{getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("box_cursor_trial",on).apply();refreshControls();});setup.addView(cursorTrial);
   row(setup,action("Nickname",()->renameSelected()),action("Forget target",()->forgetSelected()));
@@ -96,7 +97,7 @@ public class MainActivity extends Activity {
   TextView updateStatus=new TextView(this);updateStatus.setTextSize(12);RemoteTheme.secondary(updateStatus);root.addView(updateStatus);
   row(root,action("Start remote session",()->startRemoteSession()));
   updates=new AppUpdates(this,updateStatus);row(root,action("Check / install update",()->updates.check(true)));
-  LockRemoteActivity.publish(this);message("Open Bluetooth setup to connect.");refresh();root.postDelayed(()->updates.check(false),1200);
+  LockRemoteActivity.publish(this);message("Open Bluetooth setup to connect.");refresh();root.postDelayed(()->{if(foreground)updates.check(false);},1200);
  }
  private void selectMode(boolean tv){if(tvMode!=tv){if(liveBox!=null)liveBox.close();if(lg!=null)lg.closeLiveKeyboard();}if(touchpad!=null)touchpad.cancelMotion();tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);
   boxModeButton.setSelected(!tv);tvModeButton.setSelected(tv);
@@ -121,6 +122,7 @@ public class MainActivity extends Activity {
  private void repeatKey(int report,int usage,String command,boolean pointer){if(tvMode){if(lg!=null&&lg.ready(pointer))lg.remoteAction(command);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.repeatKey(report,usage);}else if(service!=null)service.repeatKey(report,usage);}
 
  @Override protected void onDestroy(){if(lg!=null)lg.destroy();super.onDestroy();}
+ private void applyScreenPreference(){if(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("keep_screen_on",false))getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);}
  private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
  private Button action(String label,Runnable fn){Button b=new RemoteButton(this);b.setText(label);b.setAllCaps(false);b.setTextSize(14);b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(4),0,dp(4),0);b.setMinHeight(dp(48));b.setOnClickListener(v->{try{fn.run();}catch(RuntimeException e){message("Error: "+e.getMessage());}});return b;}
  private android.graphics.drawable.GradientDrawable mouseShape(int color,float[] corners){
@@ -160,10 +162,10 @@ public class MainActivity extends Activity {
  private void restoreHid(){if(!foreground||boxPaused()||!relayInvite.isEmpty()||savedTarget().isEmpty())return;if(adapter==null||!permitted()||!adapter.isEnabled()){message("Saved Bluetooth target • enable Bluetooth or permissions to reconnect.");return;}explicitDirect=true;startHid(false);}
  private void startHid(){startHid(true);}
  private void startHid(boolean interactive){if(!relayInvite.isEmpty()){message("Select Use direct Bluetooth to leave Wi-Fi relay mode.");return;}if(interactive){if(!ensure())return;pauseBox(false);}else if(adapter==null||!permitted()||!adapter.isEnabled())return;started=true;Intent i=new Intent(this,RemoteService.class);startForegroundService(i);if(!bound)bound=bindService(i,serviceConnection,Context.BIND_AUTO_CREATE);if(service!=null)service.resumeRemote();if(interactive&&Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},13);}
- @Override protected void onStart(){super.onStart();foreground=true;explicitDirect=false;if(lg!=null)lg.restoreSaved();if(boxPaused()){message("Remote paused. Tap Enable to reconnect.");return;}if(!relayInvite.isEmpty()){startGuest();return;}if(!bound)bound=bindService(new Intent(this,RemoteService.class),serviceConnection,0);relayMain.postDelayed(startupDiscovery,700);}
+ @Override protected void onStart(){super.onStart();foreground=true;explicitDirect=false;applyScreenPreference();if(lg!=null)lg.resumeForeground();if(boxPaused()){message("Remote paused. Tap Enable to reconnect.");return;}if(!relayInvite.isEmpty()){startGuest();return;}if(!bound)bound=bindService(new Intent(this,RemoteService.class),serviceConnection,0);relayMain.postDelayed(startupDiscovery,700);}
  @Override protected void onResume(){super.onResume();if(relayInvite.isEmpty()&&service!=null){showApproval();if(explicitDirect)service.resumeRemote();}}
  private void detach(){if(service!=null)service.observe(null);if(bound){unbindService(serviceConnection);bound=false;}service=null;refreshControls();}
- @Override protected void onStop(){if(liveBox!=null)liveBox.close();if(lg!=null)lg.closeLiveKeyboard();if(touchpad!=null)touchpad.cancelMotion();foreground=false;relayMain.removeCallbacks(startupDiscovery);stopRecovery();cancelPairGuest();dismissApproval();stopRelaySearch();stopGuest();detach();super.onStop();}
+ @Override protected void onStop(){if(liveBox!=null)liveBox.close();foreground=false;if(lg!=null)lg.suspendForeground();if(touchpad!=null)touchpad.cancelMotion();relayMain.removeCallbacks(startupDiscovery);stopRecovery();cancelPairGuest();dismissApproval();stopRelaySearch();stopGuest();detach();super.onStop();}
  private String name(BluetoothDevice d){try{String n=d.getName();return n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  private void discoverable(){if(!ensure())return;if(service==null||!service.registered()){message("Enable the Bluetooth remote first.");return;}Intent i=new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);i.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,300);startActivityForResult(i,12);}
  private String savedTarget(){if(service!=null)return service.lastAddress();android.content.SharedPreferences p=getSharedPreferences("remote",MODE_PRIVATE);return HostIdentity.initial(p.getString("selectedHost",null),p.getString("lastHost",""));}
