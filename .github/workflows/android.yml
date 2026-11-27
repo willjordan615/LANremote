@@ -59,6 +59,9 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.WakeAddressTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/WakePacket.java android/tests/WakePacketTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.WakePacketTest
+          javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/CredentialCipher.java android/tests/CredentialCipherTest.java android/tests/NetworkRobustnessTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.CredentialCipherTest
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.NetworkRobustnessTest
       - run: gradle -p android :app:assembleDebug :app:assembleRelease
       - name: Prepare signed APK
         env:

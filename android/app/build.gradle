@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
  namespace 'com.lanremote.bluetooth'
  compileSdk 34
- defaultConfig { applicationId 'com.lanremote.bluetooth'; minSdk 28; targetSdk 34; versionCode 44; versionName '1.3.3' }
+ defaultConfig { applicationId 'com.lanremote.bluetooth'; minSdk 28; targetSdk 34; versionCode 45; versionName '1.3.4' }
  buildTypes {
   release {
    minifyEnabled true
@@ -13,4 +13,15 @@ android {
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 
-dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.0' }
+dependencies { implementation 'com.squareup.okhttp3:okhttp:4.12.1' }
+
+tasks.register('exportRuntimeDependencies') {
+ doLast {
+  def modules = configurations.releaseRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.collect { a ->
+   [group: a.moduleVersion.id.group, name: a.moduleVersion.id.name, version: a.moduleVersion.id.version]
+  }.unique().sort { a,b -> (a.group+':'+a.name+':'+a.version) <=> (b.group+':'+b.name+':'+b.version) }
+  def out = file("$buildDir/reports/runtime-dependencies.json")
+  out.parentFile.mkdirs()
+  out.text = groovy.json.JsonOutput.toJson(modules)
+ }
+}
