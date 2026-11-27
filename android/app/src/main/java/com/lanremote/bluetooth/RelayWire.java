@@ -42,5 +42,7 @@ final class RelayWire {
  }
  static boolean validMovement(int x,int y){return x>=-127&&x<=127&&y>=-127&&y<=127&&(x!=0||y!=0);}
  static byte[] movement(int x,int y){if(!validMovement(x,y))throw new IllegalArgumentException("Invalid mouse delta");return new byte[]{3,(byte)x,(byte)y};}
+ static byte[] edit(TextEdit edit){HidKeys.text(edit.insert);byte[] raw=edit.insert.getBytes(StandardCharsets.UTF_8);byte[] out=new byte[3+raw.length];out[0]=4;out[1]=(byte)(edit.deletes>>8);out[2]=(byte)edit.deletes;System.arraycopy(raw,0,out,3,raw.length);return out;}
+ static TextEdit parseEdit(byte[] raw){if(raw.length<3||raw.length>503||raw[0]!=4)throw new IllegalArgumentException("Invalid text edit");int deletes=((raw[1]&255)<<8)|(raw[2]&255);String insert=new String(raw,3,raw.length-3,StandardCharsets.UTF_8);TextEdit edit=new TextEdit(deletes,insert);HidKeys.text(insert);return edit;}
  static byte[] text(String text){HidKeys.text(text);byte[] raw=text.getBytes(StandardCharsets.UTF_8);byte[] b=new byte[raw.length+1];b[0]=2;System.arraycopy(raw,0,b,1,raw.length);return b;}
 }

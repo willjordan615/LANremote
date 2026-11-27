@@ -33,6 +33,7 @@ public class MainActivity extends Activity {
  };
  private TextView status;
  private AppUpdates updates;
+ private LiveKeyboard liveBox;
  private LgRemote lg;
  private LinearLayout bluetoothPanel;
  private boolean tvMode;
@@ -89,7 +90,7 @@ public class MainActivity extends Activity {
   row(setup,action("Find / join host",()->findRelay()),action("Use direct Bluetooth",()->directMode()));
   row(setup,action("Approved phones",()->manageGuests()),action("Lock-screen remote",()->lockScreenSetup()));
   TextView hint=new TextView(this);hint.setTextSize(13);RemoteTheme.secondary(hint);hint.setText("Pair from the box, then select it here. Only your selected device receives commands. Likely TV/computer hosts appear first; other paired devices remain available.");setup.addView(hint);
-  lg=new LgRemote(this,root);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());
+  lg=new LgRemote(this,root);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());lg.setKeyboardFocusObserver(()->{if(foreground&&tvMode&&hasWindowFocus())lg.openLiveKeyboard(true);});liveBox=new LiveKeyboard(this);
   selectMode(false);
   TextView versionLabel=new TextView(this);versionLabel.setTextSize(12);RemoteTheme.secondary(versionLabel);try{versionLabel.setText("LANremote • "+getPackageManager().getPackageInfo(getPackageName(),0).versionName);}catch(Exception e){versionLabel.setText("LANremote");}root.addView(versionLabel);
   TextView updateStatus=new TextView(this);updateStatus.setTextSize(12);RemoteTheme.secondary(updateStatus);root.addView(updateStatus);
@@ -97,7 +98,7 @@ public class MainActivity extends Activity {
   updates=new AppUpdates(this,updateStatus);row(root,action("Check / install update",()->updates.check(true)));
   LockRemoteActivity.publish(this);message("Open Bluetooth setup to connect.");refresh();root.postDelayed(()->updates.check(false),1200);
  }
- private void selectMode(boolean tv){if(touchpad!=null)touchpad.cancelMotion();tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);
+ private void selectMode(boolean tv){if(tvMode!=tv){if(liveBox!=null)liveBox.close();if(lg!=null)lg.closeLiveKeyboard();}if(touchpad!=null)touchpad.cancelMotion();tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);
   boxModeButton.setSelected(!tv);tvModeButton.setSelected(tv);
   for(Map.Entry<Button,String[]> e:modeLabels.entrySet())e.getKey().setText(e.getValue()[tv?1:0]);
   for(Map.Entry<Button,String[]> e:modeDescriptions.entrySet())e.getKey().setContentDescription(e.getValue()[tv?1:0]);
@@ -143,7 +144,8 @@ public class MainActivity extends Activity {
   LinearLayout.LayoutParams group=new LinearLayout.LayoutParams(0,dp(48),2);group.setMargins(dp(3),dp(3),dp(3),dp(3));group.height=dp(48);group.topMargin=0;group.bottomMargin=0;row.addView(split,group);
   Button keyboard=dualAction("Keyboard",()->keyboard(),()->lg.keyboard(),false);((RemoteButton)keyboard).icon("keyboard","Open keyboard");row.addView(keyboard,new LinearLayout.LayoutParams(0,dp(48),1));parent.addView(row);
  }
- private void keyboard(){if(!boxReady())return;EditText entry=new EditText(this);entry.setHint("Type or paste text");entry.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);entry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});
+ private void keyboard(){if(!boxReady())return;liveBox.show(DeviceLabels.box(this)+" keyboard","Open the search screen on the box first. Bluetooth uses US-layout characters; app support varies.",new LiveKeyboard.Sink(){public void edit(TextEdit edit){sendBoxEdit(edit);}public void enter(){if(!boxReady())throw new IllegalStateException("Box disconnected");send(1,0x28);}},this::composeKeyboard,false);}
+ private void composeKeyboard(){if(!boxReady())return;EditText entry=new EditText(this);entry.setHint("Type or paste text");entry.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);entry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(500)});
   AlertDialog d=new AlertDialog.Builder(this).setTitle("vSeeBox keyboard").setMessage("Focus a text field on the box first. US keyboard layout. Send types the composed text; OK submits it separately.").setView(entry).setPositiveButton("Send",null).setNeutralButton("Keys",null).setNegativeButton("Cancel",null).create();
   d.setOnShowListener(x->{d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{String[] labels={"Backspace","Space","Tab"};int[] codes={0x2a,0x2c,0x2b};new AlertDialog.Builder(this).setTitle("Send special key").setItems(labels,(dialog,i)->send(1,codes[i])).show();});d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{sendBoxText(entry.getText().toString());d.dismiss();}catch(RuntimeException e){entry.setError(e.getMessage());}});entry.requestFocus();d.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE|WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);});d.show();}
 
@@ -161,7 +163,7 @@ public class MainActivity extends Activity {
  @Override protected void onStart(){super.onStart();foreground=true;explicitDirect=false;if(lg!=null)lg.restoreSaved();if(boxPaused()){message("Remote paused. Tap Enable to reconnect.");return;}if(!relayInvite.isEmpty()){startGuest();return;}if(!bound)bound=bindService(new Intent(this,RemoteService.class),serviceConnection,0);relayMain.postDelayed(startupDiscovery,700);}
  @Override protected void onResume(){super.onResume();if(relayInvite.isEmpty()&&service!=null){showApproval();if(explicitDirect)service.resumeRemote();}}
  private void detach(){if(service!=null)service.observe(null);if(bound){unbindService(serviceConnection);bound=false;}service=null;refreshControls();}
- @Override protected void onStop(){if(touchpad!=null)touchpad.cancelMotion();foreground=false;relayMain.removeCallbacks(startupDiscovery);stopRecovery();cancelPairGuest();dismissApproval();stopRelaySearch();stopGuest();detach();super.onStop();}
+ @Override protected void onStop(){if(liveBox!=null)liveBox.close();if(lg!=null)lg.closeLiveKeyboard();if(touchpad!=null)touchpad.cancelMotion();foreground=false;relayMain.removeCallbacks(startupDiscovery);stopRecovery();cancelPairGuest();dismissApproval();stopRelaySearch();stopGuest();detach();super.onStop();}
  private String name(BluetoothDevice d){try{String n=d.getName();return n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  private void discoverable(){if(!ensure())return;if(service==null||!service.registered()){message("Enable the Bluetooth remote first.");return;}Intent i=new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);i.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,300);startActivityForResult(i,12);}
  private String savedTarget(){if(service!=null)return service.lastAddress();android.content.SharedPreferences p=getSharedPreferences("remote",MODE_PRIVATE);return HostIdentity.initial(p.getString("selectedHost",null),p.getString("lastHost",""));}
@@ -213,6 +215,7 @@ public class MainActivity extends Activity {
  private void lockScreenSetup(){boolean enabled=LockRemoteActivity.enabled(this);new AlertDialog.Builder(this).setTitle("Lock-screen remote").setMessage("Enable the optional limited remote session. Start it while the phone is unlocked, then turn the screen off. The notification shortcut may require unlocking. Anyone holding the phone can use the visible remote; setup, pairing and typing remain in the normal app.").setPositiveButton(enabled?"Disable":"Enable",(dialog,w)->{getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("lock_remote",!enabled).apply();if(!enabled&&Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},14);LockRemoteActivity.publish(this);}).setNegativeButton("Cancel",null).show();}
  private void stopGuest(){if(guest!=null){guest.close();guest=null;}}
  private void directMode(){pauseBox(false);relayMain.removeCallbacks(startupDiscovery);explicitDirect=true;stopRelaySearch();stopRecovery();stopGuest();relayInvite="";getSharedPreferences("remote",MODE_PRIVATE).edit().remove("relayInvite").apply();message("Direct Bluetooth selected.");startHid();}
+ private void sendBoxEdit(TextEdit edit){if(!boxReady())throw new IllegalStateException("Box disconnected");HidKeys.text(edit.insert);if(!relayInvite.isEmpty())guest.submitEdit(RelayWire.edit(edit));else service.sendEdit(edit);}
  private void sendBoxText(String text){if(!boxReady())throw new IllegalStateException("Connect the box first.");if(!relayInvite.isEmpty())guest.submit(RelayWire.text(text));else service.sendText(text);}
  private void send(int report,int usage){if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.submit(RelayWire.key(report,usage));}else if(service!=null)service.send(report,usage);}
 

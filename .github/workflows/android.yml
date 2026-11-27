@@ -34,8 +34,9 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.CursorMathTest
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/HostIdentity.java android/tests/HostIdentityTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.HostIdentityTest
-          javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RelayWire.java android/tests/RelayWireTest.java
+          javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/TextEdit.java android/app/src/main/java/com/lanremote/bluetooth/RelayWire.java android/tests/RelayWireTest.java android/tests/TextEditTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RelayWireTest
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.TextEditTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RelayPairWire.java android/tests/RelayPairWireTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RelayPairWireTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/WakeAddress.java android/tests/WakeAddressTest.java
