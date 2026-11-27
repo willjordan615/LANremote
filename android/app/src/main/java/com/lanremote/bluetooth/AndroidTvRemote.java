@@ -23,7 +23,7 @@ final class AndroidTvRemote {
  private final ThreadPoolExecutor writer=new ThreadPoolExecutor(1,1,10,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8));
  private volatile int generation;private volatile boolean disposed,ready;private boolean connecting;private volatile Socket socket;
  private volatile OutputStream output;private volatile int features;private AlertDialog codeDialog;private volatile CompletableFuture<String> codeFuture;
- AndroidTvRemote(Activity a,String ip,boolean restricted,Observer o){activity=a;this.ip=ip;this.restricted=restricted;observer=o;prefs=a.getSharedPreferences("android_tv",Context.MODE_PRIVATE);writer.allowCoreThreadTimeOut(true);}
+ AndroidTvRemote(Activity a,String ip,boolean restricted,Observer o){activity=a;this.ip=ip;this.restricted=restricted;observer=o;prefs=SecurePrefs.open(a,"android_tv");writer.allowCoreThreadTimeOut(true);}
  boolean configured(){return !prefs.getString("pin_"+ip,"").isEmpty();}
  boolean ready(){return ready;}
  boolean supports(String a){return a!=null&&AtvWire.key(a)!=0&&(features&2)!=0;}

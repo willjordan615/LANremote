@@ -12,7 +12,7 @@ import javax.net.ssl.*;
 final class TvRecovery {
  static String store(TvPlatform p){switch(p){case LG:return "lg_remote";case SAMSUNG:return "samsung_remote";case ANDROID:return "android_tv";default:return "";}}
  static String pin(Context c,TvProfile p){
-  if(!TvRecoveryPolicy.secure(p.platform))return "";SharedPreferences prefs=c.getSharedPreferences(store(p.platform),Context.MODE_PRIVATE);
+  if(!TvRecoveryPolicy.secure(p.platform))return "";SharedPreferences prefs=SecurePrefs.open(c,store(p.platform));
   if(p.platform==TvPlatform.LG&&(prefs.getBoolean("paused_"+p.ip,false)||prefs.getBoolean("transport_legacy_"+p.ip,false)||prefs.getString("key_"+p.ip,"").isEmpty()))return "";
   if(p.platform==TvPlatform.SAMSUNG&&prefs.getString("token_"+p.ip,"").isEmpty())return "";
   return prefs.getString("pin_"+p.ip,"");
@@ -40,7 +40,7 @@ final class TvRecovery {
  static boolean move(Context c,TvProfiles profiles,TvProfile old,String address,String expected){
   TvProfile current=profiles.get(old.id);if(!TvProfile.sameEndpoint(old,current)||!expected.equals(pin(c,old))||!RelayWire.privateIP(address)||address.equals(old.ip))return false;
   for(TvProfile other:profiles.all())if(!other.id.equals(old.id)&&other.platform==old.platform&&other.ip.equals(address))return false;
-  SharedPreferences prefs=c.getSharedPreferences(store(old.platform),Context.MODE_PRIVATE);String existing=prefs.getString("pin_"+address,"");if(!existing.isEmpty()&&!existing.equals(expected))return false;
+  SharedPreferences prefs=SecurePrefs.open(c,store(old.platform));String existing=prefs.getString("pin_"+address,"");if(!existing.isEmpty()&&!existing.equals(expected))return false;
   String[] strings=old.platform==TvPlatform.LG?new String[]{"pin_","key_","nickname_","device_name_","wake_mac_","wake_wired_","wake_wifi_"}:old.platform==TvPlatform.SAMSUNG?new String[]{"pin_","token_"}:new String[]{"pin_"};
   String[] bools=old.platform==TvPlatform.LG?new String[]{"wake_manual_","paused_","transport_legacy_","cec_volume_"}:new String[0];
   // Refuse to replace a conflicting preexisting credential even if it has no profile.

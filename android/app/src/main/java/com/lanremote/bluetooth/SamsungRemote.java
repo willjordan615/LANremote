@@ -17,7 +17,7 @@ final class SamsungRemote {
  private final Activity activity;private final SharedPreferences prefs;private final String ip;private final boolean restricted;private final Observer observer;
  private final Handler main=new Handler(Looper.getMainLooper());private OkHttpClient client;private WebSocket socket;
  private boolean ready,connecting,disposed;private int generation;private volatile String offered="";
- SamsungRemote(Activity a,String ip,boolean restricted,Observer observer){activity=a;this.ip=ip;this.restricted=restricted;this.observer=observer;prefs=a.getSharedPreferences("samsung_remote",Context.MODE_PRIVATE);}
+ SamsungRemote(Activity a,String ip,boolean restricted,Observer observer){activity=a;this.ip=ip;this.restricted=restricted;this.observer=observer;prefs=SecurePrefs.open(a,"samsung_remote");}
  boolean ready(){return ready;}
  boolean configured(){return !prefs.getString("pin_"+ip,"").isEmpty()&&!prefs.getString("token_"+ip,"").isEmpty();}
  private static String fingerprint(X509Certificate cert)throws CertificateException{try{byte[] hash=MessageDigest.getInstance("SHA-256").digest(cert.getEncoded());StringBuilder out=new StringBuilder();for(byte b:hash)out.append(String.format(Locale.ROOT,"%02X",b&255));return out.toString();}catch(GeneralSecurityException e){throw new CertificateException(e);}}

@@ -60,7 +60,7 @@ final class LgRemote {
  private volatile String offeredPin="";
  LgRemote(Activity a,LinearLayout parent){this(a,parent,false);}
  LgRemote(Activity a,LinearLayout parent,boolean sessionOnly){this(a,parent,sessionOnly,null);}
- LgRemote(Activity a,LinearLayout parent,boolean sessionOnly,String target){this.sessionOnly=sessionOnly;managedTarget=target!=null;activity=a;liveKeyboard=new LiveKeyboard(a);prefs=a.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);
+ LgRemote(Activity a,LinearLayout parent,boolean sessionOnly,String target){this.sessionOnly=sessionOnly;managedTarget=target!=null;activity=a;liveKeyboard=new LiveKeyboard(a);prefs=SecurePrefs.open(a,"lg_remote");
   panel=new LinearLayout(a);panel.setOrientation(LinearLayout.VERTICAL);parent.addView(panel);panel.setVisibility(View.GONE);
   status=new TextView(a);status.setTextSize(13);status.setPadding(0,dp(4),0,dp(4));
   LinearLayout setup=new LinearLayout(a);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);RemoteTheme.setup(setup);

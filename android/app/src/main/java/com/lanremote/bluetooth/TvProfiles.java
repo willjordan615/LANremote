@@ -8,7 +8,7 @@ final class TvProfiles {
  static final String AUTO="auto",BOX="box";
  private final Context context;private final SharedPreferences prefs;
  TvProfiles(Context c){context=c.getApplicationContext();prefs=c.getSharedPreferences("tv_profiles",Context.MODE_PRIVATE);migrate();}
- private void migrate(){if(prefs.getBoolean("migrated",false))return;SharedPreferences old=context.getSharedPreferences("tv_platform",Context.MODE_PRIVATE),lg=context.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);
+ private void migrate(){if(prefs.getBoolean("migrated",false))return;SharedPreferences old=context.getSharedPreferences("tv_platform",Context.MODE_PRIVATE),lg=SecurePrefs.open(context,"lg_remote");
   String lgIp=lg.getString("last_connected_address",lg.getString("address",""));TvPlatform p=TvPlatform.saved(old.getString("platform",lgIp.isEmpty()?"NONE":"LG"));String ip=old.getString("ip",p==TvPlatform.LG?lgIp:"");if(p==TvPlatform.LG&&ip.isEmpty())ip=lgIp;
   ArrayList<TvProfile> profiles=new ArrayList<>();String selected="";
   if(TvProfile.supported(p)&&RelayWire.privateIP(ip)){TvProfile first=new TvProfile(UUID.randomUUID().toString(),p,ip,p==TvPlatform.LG?DeviceLabels.first(lg.getString("nickname_"+ip,""),lg.getString("device_name_"+ip,"")):"");profiles.add(first);selected=first.id;}

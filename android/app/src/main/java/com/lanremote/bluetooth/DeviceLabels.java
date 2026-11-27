@@ -8,7 +8,7 @@ import android.bluetooth.BluetoothDevice;
 final class DeviceLabels {
  static String clean(String s){if(s==null)return "";s=s.replaceAll("[\\p{Cntrl}]","").trim();return s.length()>64?s.substring(0,64):s;}
  static String first(String... names){for(String n:names){String s=clean(n);if(!s.isEmpty())return s;}return "";}
- static String box(Context c){SharedPreferences p=c.getSharedPreferences("remote",Context.MODE_PRIVATE);String invite=p.getString("relayInvite","");
+ static String box(Context c){SharedPreferences p=SecurePrefs.open(c,"remote");String invite=p.getString("relayInvite","");
   if(!invite.isEmpty())try{RelayWire.Invite i=RelayWire.Invite.parse(invite);return first(p.getString("relay_name_"+i.hostId,""),"Wi-Fi remote");}catch(RuntimeException ignored){return "Wi-Fi remote";}
   String target=HostIdentity.initial(p.getString("selectedHost",null),p.getString("lastHost",""));if(target.isEmpty())return "Set up Bluetooth";
   return first(p.getString("nickname_"+target,""),p.getString("device_name_"+target,""),"Bluetooth device");

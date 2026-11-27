@@ -18,7 +18,7 @@ final class SonyRemote {
  private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,10,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8));
  private volatile int generation;private volatile boolean disposed,blocked;private volatile HttpURLConnection connection;
  private boolean ready,connecting;private Map<String,String> keys=Collections.emptyMap();
- SonyRemote(Activity a,String ip,boolean restricted,Observer observer){this.activity=a;this.ip=ip;this.restricted=restricted;this.observer=observer;prefs=a.getSharedPreferences("sony_remote",Context.MODE_PRIVATE);worker.allowCoreThreadTimeOut(true);}
+ SonyRemote(Activity a,String ip,boolean restricted,Observer observer){this.activity=a;this.ip=ip;this.restricted=restricted;this.observer=observer;prefs=SecurePrefs.open(a,"sony_remote");worker.allowCoreThreadTimeOut(true);}
  boolean configured(){return !prefs.getString("psk_"+ip,"").isEmpty();}
  boolean ready(){return ready;}
  boolean supports(String action){if("playPause".equals(action))return supports("PLAY")||supports("PAUSE");return !SonyKeys.command(action,keys).isEmpty();}
