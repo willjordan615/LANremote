@@ -47,6 +47,7 @@ final class RemoteButton extends Button {
    }
    gear.close();canvas.drawPath(gear,ink);canvas.drawCircle(12,12,3.5f,ink);
   }
+  else if("hamburger".equals(icon)){for(int y=6;y<=18;y+=6)canvas.drawLine(4,y,20,y,ink);}
   else if("keyboard".equals(icon)){
    canvas.drawRoundRect(new RectF(2,5,22,19),2,2,ink);
    for(int y=8;y<=12;y+=4)for(int x=5;x<=19;x+=4)canvas.drawLine(x,y,x+1,y,ink);

@@ -95,10 +95,12 @@ public class MainActivity extends Activity {
   TextView hint=new TextView(this);hint.setTextSize(13);RemoteTheme.secondary(hint);hint.setText("Pair from the box, then select it here. Only your selected device receives commands. Likely TV/computer hosts appear first; other paired devices remain available.");setup.addView(hint);
   lg=new TvRemote(this,root);volumeRouter=new VolumeRouter(this,lg,this::refreshControls);volumeTarget=action("Volume: follow selected device",()->volumeRouter.choose());root.addView(volumeTarget);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());lg.setKeyboardFocusObserver(()->{if(foreground&&tvMode&&hasWindowFocus())lg.openLiveKeyboard(true);});liveBox=new LiveKeyboard(this);
   selectMode(false);
-  TextView versionLabel=new TextView(this);versionLabel.setTextSize(12);RemoteTheme.secondary(versionLabel);try{versionLabel.setText("LANremote • "+getPackageManager().getPackageInfo(getPackageName(),0).versionName);}catch(Exception e){versionLabel.setText("LANremote");}root.addView(versionLabel);
+  TextView versionLabel=new TextView(this);versionLabel.setTextSize(12);RemoteTheme.secondary(versionLabel);try{versionLabel.setText("LANremote • "+getPackageManager().getPackageInfo(getPackageName(),0).versionName);}catch(Exception e){versionLabel.setText("LANremote");}
   TextView updateStatus=new TextView(this);updateStatus.setTextSize(12);RemoteTheme.secondary(updateStatus);root.addView(updateStatus);
   row(root,action("Start remote session",()->startRemoteSession()));
-  updates=new AppUpdates(this,updateStatus);row(root,action("Check / install update",()->updates.check(true)));
+  updates=new AppUpdates(this,updateStatus);
+  LinearLayout footer=new LinearLayout(this);footer.setGravity(Gravity.CENTER_VERTICAL);footer.addView(versionLabel,new LinearLayout.LayoutParams(0,dp(48),1));versionLabel.setGravity(Gravity.CENTER_VERTICAL);
+  RemoteButton footerMenu=(RemoteButton)action("App menu",()->{});footerMenu.icon("hamburger","App information and updates");footerMenu.setOnClickListener(v->new AppInfo(this).menu(footerMenu,()->updates.check(true)));footer.addView(footerMenu,new LinearLayout.LayoutParams(dp(48),dp(48)));root.addView(footer);
   LockRemoteActivity.publish(this);message("Open Bluetooth setup to connect.");refresh();root.postDelayed(()->{if(foreground)updates.check(false);},1200);
  }
  private void selectMode(boolean tv){if(tvMode!=tv){if(liveBox!=null)liveBox.close();if(lg!=null)lg.closeLiveKeyboard();}if(touchpad!=null)touchpad.cancelMotion();tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null){lg.visible(tv);if(foreground){tvDemand=tv||volumeRouter!=null&&volumeRouter.wantsPrimary();lg.controlMode(tvDemand);}}if(foreground&&!relayInvite.isEmpty()&&!boxPaused()){if(tv&&(volumeRouter==null||!volumeRouter.wantsBox())){stopRecovery();stopGuest();}else if(guest==null)startGuest();}
