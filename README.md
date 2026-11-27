@@ -110,3 +110,6 @@ The main header contains the two device selectors and existing power control, wi
 
 ## Haptics and hold repeat (0.6.12)
 Native Android keyboard-tap haptics on button clicks and touchpad taps, respecting system haptic settings and the app's optional Button haptic feedback checkbox. Directional and volume +/- controls repeat after 420 ms, at most every 140 ms, with one initial haptic and no extra release click. Repetition cancels on release, cancellation, leaving button bounds, disable, focus loss, or detach. Direct Bluetooth drops repeat ticks when busy and relay allows only one repeat in flight/queued; no new dependencies or idle polling. Power, settings, OK, back, click and playback retain their existing single-press/long-press behavior. The mouse descriptor and click mappings are unchanged.
+
+## Isolated Bluetooth mouse tests (0.6.13)
+Mouse diagnostics now offers explicit left, right and one-shot relative motion tests with refreshed counters. The one-shot test works even with the gesture trial disabled. Preserve protocol negotiation callbacks arriving before connection completion. The HID descriptor and press/release format remain identical to the pre-touchpad baseline. Android send acceptance cannot establish host cursor behavior; physical test required.
