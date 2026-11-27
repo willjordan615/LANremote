@@ -21,5 +21,6 @@ final class VolumeRouter {
  }finally{syncing=false;}}
  boolean ready(String action,boolean boxReady){if(wantsBox())return boxReady;TvRemote target=wantsPrimary()?primary:secondary;return target!=null&&target.ready("MUTE".equals(action))&&target.supports(action);}
  void send(String action,Runnable box){if(wantsBox()){box.run();return;}TvRemote target=wantsPrimary()?primary:secondary;if(target!=null&&target.ready("MUTE".equals(action))&&target.supports(action))target.remoteAction(action);}
+ void networkChanged(){if(secondary!=null)secondary.networkChanged();}
  void stop(){active=false;if(secondary!=null){TvRemote old=secondary;secondary=null;secondaryProfile=null;old.setObserver(null);old.destroy();}}
 }

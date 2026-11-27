@@ -30,7 +30,7 @@ final class AndroidTvRemote {
  private void post(int g,Runnable r){main.post(()->{if(!disposed&&g==generation)r.run();});}
  private boolean current(int g){return !disposed&&g==generation;}
  private static String pin(X509Certificate c)throws Exception{byte[] d=MessageDigest.getInstance("SHA-256").digest(c.getPublicKey().getEncoded());return android.util.Base64.encodeToString(d,android.util.Base64.NO_WRAP);}
- private static synchronized KeyStore identity()throws Exception{
+ static synchronized KeyStore identity()throws Exception{
   KeyStore ks=KeyStore.getInstance("AndroidKeyStore");ks.load(null);String alias="lanremote_androidtv_v2";
   if(!ks.containsAlias(alias)){KeyPairGenerator g=KeyPairGenerator.getInstance("RSA","AndroidKeyStore");g.initialize(new KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_SIGN|KeyProperties.PURPOSE_VERIFY|KeyProperties.PURPOSE_DECRYPT).setKeySize(2048).setDigests(KeyProperties.DIGEST_SHA256,KeyProperties.DIGEST_SHA384,KeyProperties.DIGEST_SHA512).setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1,KeyProperties.SIGNATURE_PADDING_RSA_PSS).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1).setCertificateSubject(new X500Principal("CN=LANremote-"+UUID.randomUUID())).setCertificateSerialNumber(new java.math.BigInteger(63,new SecureRandom()).add(java.math.BigInteger.ONE)).build());g.generateKeyPair();}
   return ks;
