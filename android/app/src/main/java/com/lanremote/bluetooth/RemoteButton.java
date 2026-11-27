@@ -5,11 +5,26 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.widget.Button;
+import android.view.MotionEvent;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
+import java.util.function.BooleanSupplier;
 
 /** Native button with a small, scalable line icon and normal accessibility semantics. */
 final class RemoteButton extends Button {
  private final Paint ink=new Paint(Paint.ANTI_ALIAS_FLAG);
  private String icon="";
+ private Runnable repeatAction;private BooleanSupplier repeatReady;private boolean repeatTouch,hasRepeated;private float touchX,touchY;
+ private final Runnable repeatTick=new Runnable(){public void run(){if(!repeatTouch||!isEnabled()||!isShown()||!hasWindowFocus()||!repeatReady.getAsBoolean()){cancelRepeat();return;}if(!hasRepeated)feedback(RemoteButton.this);hasRepeated=true;repeatAction.run();if(repeatTouch)postDelayed(this,140);}};
+ void repeat(Runnable action,BooleanSupplier ready){repeatAction=action;repeatReady=ready;}
+ static void feedback(View view){if(view.getContext().getSharedPreferences("remote",Context.MODE_PRIVATE).getBoolean("haptics",true))view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);}
+ @Override public boolean performClick(){if(isEnabled())feedback(this);return super.performClick();}
+ private void cancelRepeat(){repeatTouch=false;removeCallbacks(repeatTick);}
+ @Override public void setEnabled(boolean enabled){if(!enabled)cancelRepeat();super.setEnabled(enabled);}
+ @Override public void onWindowFocusChanged(boolean focus){if(!focus)cancelRepeat();super.onWindowFocusChanged(focus);}
+ @Override protected void onDetachedFromWindow(){cancelRepeat();super.onDetachedFromWindow();}
+ @Override public boolean onTouchEvent(MotionEvent event){if(repeatAction==null)return super.onTouchEvent(event);switch(event.getActionMasked()){case MotionEvent.ACTION_DOWN:if(!isEnabled())return false;repeatTouch=true;hasRepeated=false;touchX=event.getX();touchY=event.getY();postDelayed(repeatTick,420);break;case MotionEvent.ACTION_MOVE:if(Math.abs(event.getX()-touchX)>getWidth()/2f||Math.abs(event.getY()-touchY)>getHeight()/2f||event.getX()<0||event.getX()>getWidth()||event.getY()<0||event.getY()>getHeight())cancelRepeat();break;case MotionEvent.ACTION_UP:boolean repeated=hasRepeated;cancelRepeat();hasRepeated=false;if(repeated){MotionEvent cancel=MotionEvent.obtain(event);cancel.setAction(MotionEvent.ACTION_CANCEL);super.onTouchEvent(cancel);cancel.recycle();return true;}break;case MotionEvent.ACTION_CANCEL:case MotionEvent.ACTION_POINTER_DOWN:cancelRepeat();break;default:break;}return super.onTouchEvent(event);}
+ static boolean repeatable(int report,int usage){return report==1&&(usage>=0x4f&&usage<=0x52)||report==2&&(usage==0xe9||usage==0xea);}
  RemoteButton(Context context){super(context);RemoteTheme.button(this);}
  void icon(String kind,String description){icon=kind;setText("");setContentDescription(description);invalidate();}
  @Override protected void onDraw(Canvas canvas){

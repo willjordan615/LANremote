@@ -19,7 +19,7 @@ final class Touchpad extends LinearLayout {
   toggle=new RemoteButton(c);toggle.setAllCaps(false);toggle.setText("Touchpad ▾");addView(toggle,new LayoutParams(-1,RemoteTheme.dp(c,48)));
   pad=new TextView(c);pad.setText("Drag to move • Tap to click");pad.setTextColor(RemoteTheme.MUTED);pad.setGravity(Gravity.CENTER);pad.setBackground(RemoteTheme.shape(c,RemoteTheme.MUTED_SURFACE,12,RemoteTheme.BORDER));pad.setContentDescription("Mouse touchpad");pad.setVisibility(GONE);pad.setEnabled(false);pad.setText("Connect your device to move the cursor");LayoutParams lp=new LayoutParams(-1,RemoteTheme.dp(c,156));lp.setMargins(RemoteTheme.dp(c,3),RemoteTheme.dp(c,2),RemoteTheme.dp(c,3),RemoteTheme.dp(c,2));addView(pad,lp);
   toggle.setOnClickListener(v->{boolean open=pad.getVisibility()!=VISIBLE;reset();pad.setVisibility(open?VISIBLE:GONE);toggle.setText(open?"Touchpad ▴":"Touchpad ▾");toggle.setSelected(open);});
-  pad.setOnTouchListener((v,e)->touch(e));pad.setOnClickListener(v->{if(pad.isEnabled())click.run();});
+  pad.setOnTouchListener((v,e)->touch(e));pad.setOnClickListener(v->{if(pad.isEnabled()){RemoteButton.feedback(pad);click.run();}});
  }
  void available(boolean ready,String unavailable){String label=ready?"Drag to move • Tap to click":unavailable;if(pad.isEnabled()==ready&&label.contentEquals(pad.getText()))return;pad.setEnabled(ready);pad.setText(label);if(!ready)reset();}
  private void reset(){tracking=false;moved=false;dx=dy=0;if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);}

@@ -11,11 +11,13 @@ final class RelayGuest implements AutoCloseable {
  private final Context context;private final Handler main;private final RelayWire.Invite invite;private final Observer observer;
  private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(32));
  private final java.util.concurrent.atomic.AtomicBoolean motionPending=new java.util.concurrent.atomic.AtomicBoolean();
+ private final java.util.concurrent.atomic.AtomicBoolean repeatPending=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean closed;private boolean ready;private volatile Socket active;
  private final Runnable poll=new Runnable(){public void run(){if(closed)return;submit(new byte[]{0});main.postDelayed(this,4000);}};
  RelayGuest(Context context,Handler main,RelayWire.Invite invite,Observer observer){this.context=context.getApplicationContext();this.main=main;this.invite=invite;this.observer=observer;main.post(poll);}
  boolean ready(){return ready&&!closed;}
  void submit(byte[] command){if(closed)return;try{worker.execute(()->exchange(command));}catch(RejectedExecutionException e){observer.update(ready,"Wi-Fi relay queue full. Try again.");}}
+ void repeatKey(int report,int usage){if(!ready()||!worker.getQueue().isEmpty()||!repeatPending.compareAndSet(false,true))return;try{worker.execute(()->{try{exchange(RelayWire.key(report,usage));}finally{repeatPending.set(false);}});}catch(RejectedExecutionException e){repeatPending.set(false);}}
  void movePointer(int x,int y){if(!ready()||!RelayWire.validMovement(x,y)||!worker.getQueue().isEmpty()||!motionPending.compareAndSet(false,true))return;try{worker.execute(()->{try{exchange(RelayWire.movement(x,y));}finally{motionPending.set(false);}});}catch(RejectedExecutionException e){motionPending.set(false);}}
  private void exchange(byte[] command){if(closed)return;try{RelayNetwork network=RelayNetwork.wifi(context);InetAddress target=InetAddress.getByName(invite.ip);if(!network.allows(target))throw new IOException("Host must be on the same Wi-Fi subnet.");
   try(Socket socket=new Socket()){active=socket;if(closed)return;network.network.bindSocket(socket);socket.connect(new InetSocketAddress(target,RelayWire.PORT),1500);socket.setSoTimeout(2500);
