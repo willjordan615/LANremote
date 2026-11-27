@@ -69,7 +69,10 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose LANRemote-Bluetooth.apk
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify /tmp/LANRemote-debug-signed.apk
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging LANRemote-Bluetooth.apk > /tmp/lanremote-badging.txt
-          ! grep -q "^application-debuggable" /tmp/lanremote-badging.txt
+          if grep -q "^application-debuggable" /tmp/lanremote-badging.txt; then
+            echo "Production APK must not be debuggable" >&2
+            exit 1
+          fi
           grep -q "package: name='com.lanremote.bluetooth'" /tmp/lanremote-badging.txt
           release_bytes=$(stat -c%s LANRemote-Bluetooth.apk)
           debug_bytes=$(stat -c%s /tmp/LANRemote-debug-signed.apk)
