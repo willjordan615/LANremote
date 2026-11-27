@@ -1,0 +1,61 @@
+package com.lanremote.bluetooth;
+import android.app.*;
+import android.content.*;
+import android.os.*;
+import android.view.*;
+import android.widget.*;
+import java.util.*;
+
+final class TvRemote {
+ private final Activity activity;private final boolean restricted;private final SharedPreferences prefs;private final LinearLayout panel,driverPanel;
+ private final Handler main=new Handler(Looper.getMainLooper());private TvPlatform platform;private String ip;private LgRemote lg;private SamsungRemote samsung;
+ private TextView mirror;private Runnable observer,keyboardObserver;private boolean active,selected,disposed,discovering;private String status="Select a TV platform.";
+ private final Runnable idle=this::restSamsung;
+ TvRemote(Activity a,LinearLayout parent){this(a,parent,false);}
+ TvRemote(Activity a,LinearLayout parent,boolean restricted){activity=a;this.restricted=restricted;prefs=a.getSharedPreferences("tv_platform",Context.MODE_PRIVATE);
+  SharedPreferences legacy=a.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);String old=legacy.getString("last_connected_address",legacy.getString("address",""));platform=TvPlatform.saved(prefs.getString("platform",old.isEmpty()?"NONE":"LG"));ip=prefs.getString("ip",platform==TvPlatform.LG?old:"");
+  panel=new LinearLayout(a);panel.setOrientation(LinearLayout.VERTICAL);parent.addView(panel);panel.setVisibility(View.GONE);
+  if(!restricted){Button choose=new RemoteButton(a);choose.setText("Find / change TV platform");choose.setAllCaps(false);choose.setOnClickListener(v->choose());panel.addView(choose,new LinearLayout.LayoutParams(-1,RemoteTheme.dp(a,48)));}
+  driverPanel=new LinearLayout(a);driverPanel.setOrientation(LinearLayout.VERTICAL);panel.addView(driverPanel);
+  // Existing LG users retain their settings; drivers do not open network connections until used.
+  if(platform==TvPlatform.LG)ensureDriver();
+  else status=platform==TvPlatform.NONE?"Select a TV platform.":platform.label+" • select TV to connect.";
+ }
+ private void ensureDriver(){if(disposed)return;if(platform==TvPlatform.LG&&lg==null){lg=new LgRemote(activity,driverPanel,restricted);if(mirror!=null)lg.setMirrorStatus(mirror);lg.setObserver(this::notifyObserver);lg.setKeyboardFocusObserver(()->{if(keyboardObserver!=null)keyboardObserver.run();});lg.visible(selected);}
+  if(platform==TvPlatform.SAMSUNG&&samsung==null&&!ip.isEmpty()){samsung=new SamsungRemote(activity,ip,restricted,this::message);if(!restricted){Button connect=new RemoteButton(activity);connect.setText("Connect / pair Samsung");connect.setAllCaps(false);connect.setOnClickListener(v->connect());driverPanel.addView(connect);Button forget=new RemoteButton(activity);forget.setText("Forget Samsung pairing");forget.setAllCaps(false);forget.setOnClickListener(v->new AlertDialog.Builder(activity).setMessage("Forget this TV's saved certificate and pairing token?").setPositiveButton("Forget",(d,w)->samsung.forget()).setNegativeButton("Cancel",null).show());driverPanel.addView(forget);}}
+ }
+ private void notifyObserver(){if(observer!=null)observer.run();}
+ private void message(String value){status=value;if(mirror!=null)mirror.setText("TV: "+value);notifyObserver();}
+ void setMirrorStatus(TextView v){mirror=v;if(lg!=null)lg.setMirrorStatus(v);else message(status);}
+ void setObserver(Runnable r){observer=r;}
+ void setKeyboardFocusObserver(Runnable r){keyboardObserver=r;}
+ String deviceLabel(){if(lg!=null)return lg.deviceLabel();if(platform==TvPlatform.LG)return "LG TV";return platform==TvPlatform.NONE?"Set up TV":platform.label;}
+ void visible(boolean show){selected=show;panel.setVisibility(show&&!restricted?View.VISIBLE:View.GONE);if(show)ensureDriver();if(lg!=null)lg.visible(show);}
+ void resumeForeground(){resumeForeground(true);}
+ void resumeForeground(boolean tv){active=true;selected=tv;if(platform==TvPlatform.LG){ensureDriver();lg.resumeForeground(tv);}else if(tv){ensureDriver();if(samsung!=null)samsung.connect(false);}}
+ void controlMode(boolean tv){selected=tv;main.removeCallbacks(idle);if(!active)return;if(tv){ensureDriver();if(lg!=null)lg.controlMode(true);else if(samsung!=null)samsung.connect(false);}else{if(lg!=null)lg.controlMode(false);if(samsung!=null)main.postDelayed(idle,IdlePolicy.TV_IDLE);}}
+ private void restSamsung(){if(!selected&&samsung!=null)samsung.disconnect("Samsung connection resting.");}
+ void suspendForeground(){active=false;main.removeCallbacks(idle);if(lg!=null)lg.suspendForeground();if(samsung!=null)samsung.disconnect("Samsung connection resting.");}
+ void destroy(){disposed=true;main.removeCallbacksAndMessages(null);if(lg!=null)lg.destroy();if(samsung!=null)samsung.destroy();}
+ private void choose(){if(restricted||!active||discovering)return;new AlertDialog.Builder(activity).setTitle("TV platform").setItems(new String[]{"Discover on Wi-Fi","LG webOS","Samsung Tizen","Roku (identify only)","Android / Google TV (not yet supported)"},(d,i)->{if(i==0)discover();else manual(TvPlatform.values()[i-1]);}).setNegativeButton("Cancel",null).show();}
+ private void manual(TvPlatform p){if(p==TvPlatform.ROKU||p==TvPlatform.ANDROID){new AlertDialog.Builder(activity).setMessage(p.label+" identified. Native control is not available yet. Your existing TV configuration is unchanged.").setPositiveButton("OK",null).show();return;}if(p==TvPlatform.LG){switchTo(p,"");return;}EditText field=new EditText(activity);field.setSingleLine(true);field.setInputType(android.text.InputType.TYPE_CLASS_PHONE);field.setHint("TV private IPv4 address");if(platform==p)field.setText(ip);AlertDialog d=new AlertDialog.Builder(activity).setTitle(p.label).setView(field).setPositiveButton("Select",null).setNegativeButton("Cancel",null).create();d.setOnShowListener(v->d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w->{String address=field.getText().toString().trim();if(!RelayWire.privateIP(address)){field.setError("Enter a private IPv4 address");return;}d.dismiss();switchTo(p,address);}));d.show();}
+ private void discover(){discovering=true;message("Looking for TV platforms…");new Thread(()->{try{List<TvDiscovery.Found> list=TvDiscovery.find(activity.getApplicationContext());main.post(()->{discovering=false;if(disposed||!active)return;if(list.isEmpty()){message("No advertised TV platforms found. Select manually.");return;}String[] labels=new String[list.size()];for(int i=0;i<labels.length;i++)labels[i]=list.get(i).label();new AlertDialog.Builder(activity).setTitle("Choose your TV").setItems(labels,(d,i)->{TvDiscovery.Found item=list.get(i);if(item.platform==TvPlatform.ROKU){manual(item.platform);return;}switchTo(item.platform,item.ip);}).setNegativeButton("Cancel",null).show();});}catch(Exception e){main.post(()->{discovering=false;if(!disposed&&active)message("TV discovery unavailable. Select manually.");});}},"tv-discovery").start();}
+ private void switchTo(TvPlatform p,String address){if(!active||restricted)return;main.removeCallbacks(idle);if(lg!=null){lg.destroy();lg=null;}if(samsung!=null){samsung.destroy();samsung=null;}driverPanel.removeAllViews();platform=p;ip=address;prefs.edit().putString("platform",p.name()).putString("ip",address).apply();ensureDriver();if(lg!=null){if(!address.isEmpty())lg.selectAddress(address);lg.visible(true);lg.resumeForeground(true);}else message("Samsung TV selected. Connect / pair to approve.");notifyObserver();}
+ void connect(){ensureDriver();if(lg!=null)lg.connect();else if(samsung!=null)samsung.connect(!restricted);else message("Select a supported TV first.");}
+ boolean sessionConfigured(){if(lg!=null)return lg.sessionConfigured();if(platform==TvPlatform.SAMSUNG){ensureDriver();return samsung!=null&&samsung.configured();}return false;}
+ boolean sessionCanWake(){return lg!=null&&lg.sessionCanWake();}
+ void sessionWake(){if(lg!=null)lg.sessionWake();}
+ void sessionOff(){if(lg!=null)lg.sessionOff();else if(samsung!=null)samsung.action("powerOff");}
+ boolean ready(boolean pointer){return lg!=null?lg.ready(pointer):samsung!=null&&samsung.ready();}
+ boolean supports(String action){if(platform==TvPlatform.LG)return true;if(platform==TvPlatform.SAMSUNG)return "playPause".equals(action)||!TvPlatform.samsungKey(action).isEmpty();return false;}
+ boolean pointerAvailable(){return lg!=null&&lg.ready(true);}
+ void movePointer(int x,int y){if(lg!=null)lg.movePointer(x,y);}
+ void remoteAction(String action){if(lg!=null)lg.remoteAction(action);else if(samsung!=null){if("playPause".equals(action)){new AlertDialog.Builder(activity).setTitle("Playback").setItems(new String[]{"Play","Pause"},(d,i)->samsung.action(i==0?"PLAY":"PAUSE")).show();}else samsung.action(action);}}
+ void keyboard(){if(lg!=null)lg.keyboard();}
+ void openLiveKeyboard(boolean auto){if(lg!=null)lg.openLiveKeyboard(auto);}
+ void closeLiveKeyboard(){if(lg!=null)lg.closeLiveKeyboard();}
+ void quickSettings(){if(lg!=null)lg.quickSettings();else remoteAction("MENU");}
+ void pictureModes(){if(lg!=null)lg.pictureModes();else quickSettings();}
+ void quickHdmi(int n){if(lg!=null)lg.quickHdmi(n);else if(samsung!=null&&n>=1&&n<=3){if(samsung.ready())samsung.action("HDMI"+n);else message("Select Samsung TV and connect first.");}}
+ void powerDialog(){if(lg!=null)lg.powerDialog();else if(samsung!=null&&samsung.ready())new AlertDialog.Builder(activity).setTitle("Samsung TV power").setMessage("Turn the TV off? Network power-on is not supported yet.").setPositiveButton("Power off",(d,w)->samsung.action("powerOff")).setNegativeButton("Cancel",null).show();else message("Select and connect a supported TV first.");}
+}

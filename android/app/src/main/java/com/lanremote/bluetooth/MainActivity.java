@@ -35,12 +35,13 @@ public class MainActivity extends Activity {
  private TextView status;
  private AppUpdates updates;
  private LiveKeyboard liveBox;
- private LgRemote lg;
+ private TvRemote lg;
  private LinearLayout bluetoothPanel;
  private boolean tvMode;
  private Touchpad touchpad;
  private Button boxModeButton,tvModeButton;
  private final Map<Button,Boolean> pointerControls=new HashMap<>();
+ private final Map<Button,String> tvCommands=new HashMap<>();
  private final Map<Button,String[]> modeLabels=new HashMap<>();
  private final Map<Button,String[]> modeDescriptions=new HashMap<>();
  private Spinner paired;
@@ -92,7 +93,7 @@ public class MainActivity extends Activity {
   row(setup,action("Find / join host",()->findRelay()),action("Use direct Bluetooth",()->directMode()));
   row(setup,action("Approved phones",()->manageGuests()),action("Lock-screen remote",()->lockScreenSetup()));
   TextView hint=new TextView(this);hint.setTextSize(13);RemoteTheme.secondary(hint);hint.setText("Pair from the box, then select it here. Only your selected device receives commands. Likely TV/computer hosts appear first; other paired devices remain available.");setup.addView(hint);
-  lg=new LgRemote(this,root);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());lg.setKeyboardFocusObserver(()->{if(foreground&&tvMode&&hasWindowFocus())lg.openLiveKeyboard(true);});liveBox=new LiveKeyboard(this);
+  lg=new TvRemote(this,root);lg.setMirrorStatus(tvStatus);lg.setObserver(()->refreshControls());lg.setKeyboardFocusObserver(()->{if(foreground&&tvMode&&hasWindowFocus())lg.openLiveKeyboard(true);});liveBox=new LiveKeyboard(this);
   selectMode(false);
   TextView versionLabel=new TextView(this);versionLabel.setTextSize(12);RemoteTheme.secondary(versionLabel);try{versionLabel.setText("LANremote • "+getPackageManager().getPackageInfo(getPackageName(),0).versionName);}catch(Exception e){versionLabel.setText("LANremote");}root.addView(versionLabel);
   TextView updateStatus=new TextView(this);updateStatus.setTextSize(12);RemoteTheme.secondary(updateStatus);root.addView(updateStatus);
@@ -117,9 +118,9 @@ public class MainActivity extends Activity {
  }
  private void movePointer(int x,int y){if(!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true))return;if(tvMode){if(lg!=null)lg.movePointer(x,y);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.movePointer(x,y);}else if(service!=null)service.movePointer(x,y);}
  private void refreshDeviceLabels(){if(boxModeButton==null||tvModeButton==null)return;String box=DeviceLabels.box(this),tv=lg==null?"Set up TV":lg.deviceLabel();if(!box.contentEquals(boxModeButton.getText()))boxModeButton.setText(box);if(!tv.contentEquals(tvModeButton.getText()))tvModeButton.setText(tv);boxModeButton.setContentDescription(box);tvModeButton.setContentDescription(tv);}
- private void refreshControls(){refreshDeviceLabels();boolean bt=!relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer):bt);}if(touchpad!=null)touchpad.available(tvMode?lg!=null&&lg.ready(true):bt&&getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true),!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true)?"Bluetooth cursor is off; click buttons remain active.":"Connect your device to move the cursor");}
+ private void refreshControls(){refreshDeviceLabels();boolean bt=!relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer)&&lg.supports(tvCommands.getOrDefault(b,"keyboard")):bt);}if(touchpad!=null)touchpad.available(tvMode?lg!=null&&lg.pointerAvailable():bt&&getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true),!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true)?"Bluetooth cursor is off; click buttons remain active.":"Connect your device to move the cursor");}
  private Button dualAction(String label,Runnable bluetooth,Runnable tv,boolean pointer){Button b=action(label,()->{if(tvMode)tv.run();else bluetooth.run();});controls.add(b);pointerControls.put(b,pointer);b.setEnabled(false);return b;}
- private Button dual(String label,int report,int usage,String tv,boolean pointer){Button b=dualAction(label,()->send(report,usage),()->lg.remoteAction(tv),pointer);if(RemoteButton.repeatable(report,usage))((RemoteButton)b).repeat(()->repeatKey(report,usage,tv,pointer),()->foreground&&b.isEnabled());return b;}
+ private Button dual(String label,int report,int usage,String tv,boolean pointer){Button b=dualAction(label,()->send(report,usage),()->lg.remoteAction(tv),pointer);tvCommands.put(b,tv);if(RemoteButton.repeatable(report,usage))((RemoteButton)b).repeat(()->repeatKey(report,usage,tv,pointer),()->foreground&&b.isEnabled());return b;}
  private void repeatKey(int report,int usage,String command,boolean pointer){if(tvMode){if(lg!=null&&lg.ready(pointer))lg.remoteAction(command);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.repeatKey(report,usage);}else if(service!=null)service.repeatKey(report,usage);}
 
  @Override protected void onDestroy(){if(lg!=null)lg.destroy();super.onDestroy();}
