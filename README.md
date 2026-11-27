@@ -1,4 +1,9 @@
-# LAN Remote 0.2
+# LANremote
+
+## Native Android app — 1.0.0
+[Install the latest APK](https://github.com/willjordan615/LANremote/releases/latest/download/LANRemote-Bluetooth.apk). Android 9+, compatible Bluetooth HID hosts and LG webOS TVs. The native app is now the primary project; the old Node/Termux proof of concept below is retained for reference. Production APKs are R8-optimized and permanently signed with the existing key. In-place updates preserve the app ID and signing identity. Hardware regression testing of the first optimized build is still required.
+
+### Legacy web prototype (0.2)
 Local Wi-Fi remote for Android TV Remote v2 devices. vSeeBox V2 compatibility is not yet confirmed.
 
 ## Run on Android
@@ -122,3 +127,6 @@ Keyboard opens a live search entry using the native Android IME. Committed text 
 
 ## Idle power (0.6.16)
 Normal Android screen timeout is the default; optional keep-awake checkbox in Bluetooth setup. LG control/pointer WebSockets close on activity stop and saved trusted TV reconnects on activity start; visible keepalive interval 45s (formerly 20s). Explicit TV wake diagnostics remain bounded; reconnect is suppressed when backgrounded. Wi-Fi guest health check now 30s after last result, including actual commands; disconnected retries back off from 5 to 60s, no overlapping health probes. Guest closes on stop as before. Lock session uses connection callbacks and preference changes instead of 1s polling. Automatic release checks limited to one per installed version per six hours; manual checks unrestricted. Direct HID and advertised household relay remain available in the foreground service. No HID/report/mouse protocol changes. Actual battery savings require device measurement; a newly disconnected idle relay may take longer to display offline state.
+
+## Production optimization (1.0.0)
+Release pipeline builds both variants, signs with the same permanent key, verifies the optimized APK is non-debuggable and smaller than the same-version debug build, and publishes only the optimized APK. CI records exact signed sizes and stores R8 mapping. Old APK cleanup is limited to LANremote's own obsolete download files; pending newer updates are preserved. Normal remote connects LG on selection or explicit TV action, rests LG sockets after 60s outside TV mode, and suspends guest connection while viewing TV controls. Direct Bluetooth host and household advertisement remain available. Guest recovery reacts to Wi-Fi link changes and retains bounded discovery fallback for same-network host address changes (15/30/60/120s). Worker threads expire when idle. Lock-screen behavior and HID/relay wire formats unchanged. No new dependencies. Continuous cursor packets are not batched because this could affect responsiveness or compatibility. Battery measurements and hardware verification remain outstanding.

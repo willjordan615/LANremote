@@ -14,9 +14,9 @@ final class RelayHost implements AutoCloseable {
  private RelayPairHost pairing;
  private final Handler main;private final Receiver receiver;
  private final AtomicBoolean closed=new AtomicBoolean();
- private final ThreadPoolExecutor workers=new ThreadPoolExecutor(3,3,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8));
+ private final ThreadPoolExecutor workers=new ThreadPoolExecutor(3,3,30,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8));
  RelayHost(Context context,Handler main,Receiver receiver,String name,RelayPairHost.Observer approval,RelayPermissions permissions)throws Exception{
-  this.permissions=permissions;this.main=main;this.receiver=receiver;network=RelayNetwork.wifi(context);invite=new RelayWire.Invite(network.local.getHostAddress(),permissions.master());
+  workers.allowCoreThreadTimeOut(true);this.permissions=permissions;this.main=main;this.receiver=receiver;network=RelayNetwork.wifi(context);invite=new RelayWire.Invite(network.local.getHostAddress(),permissions.master());
   server=new ServerSocket();try{server.setReuseAddress(true);server.bind(new InetSocketAddress(network.local,RelayWire.PORT),8);}catch(Exception e){server.close();throw e;}
   try{pairing=new RelayPairHost(network,invite,main,approval,permissions);}catch(Exception e){server.close();throw e;}
   try{advertisement=new RelayDiscovery.Advertisement(context,name,invite);}catch(RuntimeException ignored){}

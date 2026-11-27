@@ -45,26 +45,38 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.WakeAddressTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/WakePacket.java android/tests/WakePacketTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.WakePacketTest
-      - run: gradle -p android :app:assembleDebug
+      - run: gradle -p android :app:assembleDebug :app:assembleRelease
       - name: Prepare signed APK
         env:
           SIGNING_KEY: ${{ secrets.LANREMOTE_SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.LANREMOTE_SIGNING_PASSWORD }}
         run: |
           set -euo pipefail
-          input=android/app/build/outputs/apk/debug/app-debug.apk
+          input=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          debug=android/app/build/outputs/apk/debug/app-debug.apk
           if [[ -n "$SIGNING_KEY" && -n "$SIGNING_PASSWORD" ]]; then
             umask 077
             keystore="$(mktemp)"
             trap 'rm -f "$keystore"' EXIT
             printf '%s' "$SIGNING_KEY" | base64 -d > "$keystore"
             "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign --ks "$keystore" --ks-key-alias lanremote --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD --out LANRemote-Bluetooth.apk "$input"
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign --ks "$keystore" --ks-key-alias lanremote --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD --out /tmp/LANRemote-debug-signed.apk "$debug"
             echo "SIGNING_KIND=stable" >> "$GITHUB_ENV"
           else
             echo "Both permanent signing secrets are required for release builds" >&2
             exit 1
           fi
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify LANRemote-Bluetooth.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose LANRemote-Bluetooth.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify /tmp/LANRemote-debug-signed.apk
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging LANRemote-Bluetooth.apk > /tmp/lanremote-badging.txt
+          ! grep -q "^application-debuggable" /tmp/lanremote-badging.txt
+          grep -q "package: name='com.lanremote.bluetooth'" /tmp/lanremote-badging.txt
+          release_bytes=$(stat -c%s LANRemote-Bluetooth.apk)
+          debug_bytes=$(stat -c%s /tmp/LANRemote-debug-signed.apk)
+          [[ "$release_bytes" -lt "$debug_bytes" && "$release_bytes" -le 10000000 ]]
+          printf "Signed debug APK: %s bytes\nSigned optimized APK: %s bytes\n" "$debug_bytes" "$release_bytes" | tee apk-size.txt >> "$GITHUB_STEP_SUMMARY"
+          echo "RELEASE_BYTES=$release_bytes" >> "$GITHUB_ENV"
+          echo "DEBUG_BYTES=$debug_bytes" >> "$GITHUB_ENV"
           code=$(sed -nE 's/.*versionCode ([0-9]+);.*/\1/p' android/app/build.gradle)
           [[ "$code" =~ ^[0-9]+$ ]]
           echo "APP_CODE=$code" >> "$GITHUB_ENV"
@@ -72,9 +84,18 @@ jobs:
         with:
           name: LANRemote-Bluetooth
           path: LANRemote-Bluetooth.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-build-diagnostics
+          path: |
+            apk-size.txt
+            android/app/build/outputs/mapping/release/mapping.txt
       - name: Publish permanently signed APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           printf 'LANREMOTE_VERSION_CODE: %s\nLANREMOTE_SIGNING: %s\n\nAndroid 9+. Bluetooth HID compatibility depends on the phone and TV. Android requires confirmation for updates. First migration from a debug-signed build requires manual reinstall.\n' "$APP_CODE" "$SIGNING_KIND" > release-notes.txt
-          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "Bluetooth prototype build ${GITHUB_RUN_NUMBER}" --notes-file release-notes.txt --latest
+          version=$(sed -nE "s/.*versionName '([^']+)'.*/\1/p" android/app/build.gradle)
+          [[ -n "$version" ]]
+          printf "\nProduction APK: %s bytes (same-version debug: %s bytes).\n" "$RELEASE_BYTES" "$DEBUG_BYTES" >> release-notes.txt
+          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "LANremote $version" --notes-file release-notes.txt --latest

@@ -9,14 +9,15 @@ import java.util.concurrent.*;
 final class RelayGuest implements AutoCloseable {
  interface Observer{void update(boolean ready,String status);}
  private final Context context;private final Handler main;private final RelayWire.Invite invite;private final Observer observer;
- private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(32));
+ private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,10,TimeUnit.SECONDS,new ArrayBlockingQueue<>(32));
  private final java.util.concurrent.atomic.AtomicBoolean motionPending=new java.util.concurrent.atomic.AtomicBoolean();
  private final java.util.concurrent.atomic.AtomicBoolean repeatPending=new java.util.concurrent.atomic.AtomicBoolean();
  private volatile boolean closed;private boolean ready;private volatile Socket active;
  private long lastResult;private int failures;private String lastStatus="";private boolean polling;
  private final Runnable poll=new Runnable(){public void run(){if(closed)return;long interval=IdlePolicy.relayDelay(ready,failures);long age=android.os.SystemClock.elapsedRealtime()-lastResult;if(lastResult!=0&&age<interval){main.postDelayed(this,interval-age);return;}if(polling||worker.getActiveCount()>0||!worker.getQueue().isEmpty()){main.postDelayed(this,1000);return;}polling=true;try{worker.execute(()->{try{exchange(new byte[]{0});}finally{main.post(()->{polling=false;if(!closed)schedulePoll();});}});}catch(RejectedExecutionException e){polling=false;schedulePoll();}}};
  private void schedulePoll(){main.removeCallbacks(poll);if(!closed)main.postDelayed(poll,IdlePolicy.relayDelay(ready,failures));}
- RelayGuest(Context context,Handler main,RelayWire.Invite invite,Observer observer){this.context=context.getApplicationContext();this.main=main;this.invite=invite;this.observer=observer;main.post(poll);}
+ RelayGuest(Context context,Handler main,RelayWire.Invite invite,Observer observer){this.context=context.getApplicationContext();this.main=main;this.invite=invite;this.observer=observer;worker.allowCoreThreadTimeOut(true);main.post(poll);}
+ void probeNow(){if(closed)return;lastResult=0;failures=0;main.removeCallbacks(poll);main.post(poll);}
  boolean ready(){return ready&&!closed;}
  void submit(byte[] command){if(closed)return;try{worker.execute(()->exchange(command));}catch(RejectedExecutionException e){observer.update(ready,"Wi-Fi relay queue full. Try again.");}}
  void submitEdit(byte[] command){if(!ready()||worker.getQueue().size()>=8)throw new IllegalStateException("Wi-Fi relay busy");try{worker.execute(()->exchange(command));}catch(RejectedExecutionException e){throw new IllegalStateException("Wi-Fi relay queue full");}}

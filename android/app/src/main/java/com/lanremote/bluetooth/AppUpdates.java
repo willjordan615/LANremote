@@ -29,6 +29,7 @@ final class AppUpdates {
  private boolean alive(){return !activity.isFinishing()&&!activity.isDestroyed();}
  void check(boolean manual){
   if(checking)return;
+  try{cleanupObsolete(version());}catch(Exception ignored){}
   if(prefs.getLong("download",-1)>=0){try{if(prefs.getLong("version",-1)<=version())clear(prefs.getLong("download",-1));}catch(Exception e){show("Update state: "+e.getMessage());return;}if(prefs.getLong("download",-1)>=0){if(manual)installOrStatus();else show("Update download saved. Tap Check / install update.");return;}}
   if(!manual){try{long installed=version();long now=System.currentTimeMillis();long last=prefs.getLong("auto_check_time",0);if(prefs.getLong("auto_check_build",-1)==installed&&now>=last&&now-last<IdlePolicy.UPDATE_INTERVAL){show(prefs.getString("auto_check_status","Automatic update check recently completed."));return;}prefs.edit().putLong("auto_check_time",now).putLong("auto_check_build",installed).putString("auto_check_status","Automatic update check recently attempted.").apply();}catch(Exception e){show("Update state: "+e.getMessage());return;}}
   checking=true;show("Checking GitHub for updates…");
@@ -49,6 +50,7 @@ final class AppUpdates {
    }catch(Exception e){activity.runOnUiThread(()->{checking=false;if(alive())show("Update check: "+e.getMessage());});}finally{if(c!=null)c.disconnect();}
   },"lanremote-update-check").start();
  }
+ private void cleanupObsolete(long installed){File dir=activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);if(dir==null)return;File[] files=dir.listFiles();if(files==null)return;long pending=prefs.getLong("version",-1);for(File file:files){Matcher m=Pattern.compile("LANRemote-([0-9]+)\\.apk").matcher(file.getName());if(!file.isFile()||!m.matches())continue;try{long code=Long.parseLong(m.group(1));if(code<=installed&&code!=pending)file.delete();}catch(NumberFormatException ignored){}}}
  private File apk(long code){File dir=activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);if(dir==null)throw new IllegalStateException("Download storage unavailable");return new File(dir,"LANRemote-"+code+".apk");}
  private void download(String url,long code){
   try{File f=apk(code);if(f.exists()&&!f.delete())throw new IOException("Cannot replace old download");
@@ -56,7 +58,7 @@ final class AppUpdates {
    long id=downloads.enqueue(request);prefs.edit().putLong("download",id).putLong("version",code).apply();show("Downloading update. Tap Check / install update after download finishes.");
   }catch(Exception e){show("Download failed: "+e.getMessage());}
  }
- private void clear(long id){downloads.remove(id);prefs.edit().remove("download").remove("version").apply();}
+ private void clear(long id){downloads.remove(id);prefs.edit().remove("download").remove("version").apply();try{cleanupObsolete(version());}catch(Exception ignored){}}
  private void installOrStatus(){
   long id=prefs.getLong("download",-1),code=prefs.getLong("version",-1);
   if(id<0){check(true);return;}
