@@ -80,7 +80,8 @@ jobs:
             echo "Both permanent signing secrets are required for release builds" >&2
             exit 1
           fi
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose LANRemote-Bluetooth.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs LANRemote-Bluetooth.apk | tee apk-signing.txt
+          sha256sum LANRemote-Bluetooth.apk > SHA256SUMS.txt
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify /tmp/LANRemote-debug-signed.apk
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging LANRemote-Bluetooth.apk > /tmp/lanremote-badging.txt
           if grep -q "^application-debuggable" /tmp/lanremote-badging.txt; then
@@ -106,13 +107,16 @@ jobs:
           name: release-build-diagnostics
           path: |
             apk-size.txt
+            apk-signing.txt
+            SHA256SUMS.txt
             android/app/build/outputs/mapping/release/mapping.txt
       - name: Publish permanently signed APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          printf 'LANREMOTE_VERSION_CODE: %s\nLANREMOTE_SIGNING: %s\n\nAndroid 9+. Bluetooth HID compatibility depends on the phone and TV. Android requires confirmation for updates. First migration from a debug-signed build requires manual reinstall.\n' "$APP_CODE" "$SIGNING_KIND" > release-notes.txt
+          printf 'LANREMOTE_VERSION_CODE: %s\nLANREMOTE_SIGNING: %s\n\nAndroid 9+. Bluetooth HID compatibility depends on the phone and TV. Android requires confirmation for updates. Updates must retain the installed signing identity.\n' "$APP_CODE" "$SIGNING_KIND" > release-notes.txt
           version=$(sed -nE "s/.*versionName '([^']+)'.*/\1/p" android/app/build.gradle)
           [[ -n "$version" ]]
           printf "\nProduction APK: %s bytes (same-version debug: %s bytes).\n" "$RELEASE_BYTES" "$DEBUG_BYTES" >> release-notes.txt
-          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk --title "LANremote $version" --notes-file release-notes.txt --latest
+          printf "\nAPK SHA-256: %s\n" "$(cut -d " " -f1 SHA256SUMS.txt)" >> release-notes.txt
+          gh release create "bluetooth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" LANRemote-Bluetooth.apk SHA256SUMS.txt apk-signing.txt --title "LANremote $version" --notes-file release-notes.txt --latest

@@ -36,17 +36,17 @@ final class AppUpdates {
   new Thread(()->{
    HttpURLConnection c=null;
    try{
-    c=(HttpURLConnection)new URL(API).openConnection();c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setRequestProperty("Accept","application/vnd.github+json");c.setRequestProperty("User-Agent","LANRemote-Android");
+    c=(HttpURLConnection)new URL(API).openConnection();c.setInstanceFollowRedirects(false);c.setConnectTimeout(8000);c.setReadTimeout(8000);c.setRequestProperty("Accept","application/vnd.github+json");c.setRequestProperty("User-Agent","LANRemote-Android");
     if(c.getResponseCode()!=200)throw new IOException("GitHub HTTP "+c.getResponseCode());
     ByteArrayOutputStream bytes=new ByteArrayOutputStream();try(InputStream in=c.getInputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1){if(bytes.size()+n>512000)throw new IOException("Release metadata too large");bytes.write(b,0,n);}}
     JSONObject release=new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8));
     Matcher m=Pattern.compile("(?m)^LANREMOTE_VERSION_CODE: ([0-9]+)$").matcher(release.optString("body").replace("\r",""));
     if(!m.find())throw new IOException("Latest release does not include update version metadata");
-    long next=Long.parseLong(m.group(1));String signing=release.optString("body").contains("LANREMOTE_SIGNING: stable")?"stable":"debug";
+    long next=Long.parseLong(m.group(1));if(!Pattern.compile("(?m)^LANREMOTE_SIGNING: stable$").matcher(release.optString("body").replace("\r","")).find()||release.optBoolean("draft",false)||release.optBoolean("prerelease",false))throw new IOException("Only stable signed releases are supported");
     String url=null;JSONArray assets=release.getJSONArray("assets");for(int i=0;i<assets.length();i++){JSONObject a=assets.getJSONObject(i);if(a.optString("name").equals("LANRemote-Bluetooth.apk")&&a.optLong("size",0)>0&&a.optLong("size",0)<=10_000_000)url=a.optString("browser_download_url");}
     if(url==null||!url.startsWith(PREFIX)||!url.endsWith("/LANRemote-Bluetooth.apk"))throw new IOException("No trusted APK asset found");
     final String asset=url;final long installed=version();
-    activity.runOnUiThread(()->{checking=false;if(!alive())return;prefs.edit().putLong("auto_check_time",System.currentTimeMillis()).putLong("auto_check_build",installed).putString("auto_check_status",next<=installed?"App is up to date.":"Update available (build "+next+").").apply();if(next<=installed){show("App is up to date.");return;}show("Update available (build "+next+").");if(activity.hasWindowFocus()||manual)new AlertDialog.Builder(activity).setTitle("LAN Remote update available").setMessage("Download the new version from our GitHub release? Android will ask you to approve installation."+(signing.equals("debug")?" This experimental build may use a different signing key and require a manual reinstall.":"")).setPositiveButton("Download",(d,w)->download(asset,next)).setNegativeButton("Later",null).show();});
+    activity.runOnUiThread(()->{checking=false;if(!alive())return;prefs.edit().putLong("auto_check_time",System.currentTimeMillis()).putLong("auto_check_build",installed).putString("auto_check_status",next<=installed?"App is up to date.":"Update available (build "+next+").").apply();if(next<=installed){show("App is up to date.");return;}show("Update available (build "+next+").");if(activity.hasWindowFocus()||manual)new AlertDialog.Builder(activity).setTitle("LAN Remote update available").setMessage("Download the new version from our GitHub release? Android will ask you to approve installation.").setPositiveButton("Download",(d,w)->download(asset,next)).setNegativeButton("Later",null).show();});
    }catch(Exception e){activity.runOnUiThread(()->{checking=false;if(alive())show("Update check: "+e.getMessage());});}finally{if(c!=null)c.disconnect();}
   },"lanremote-update-check").start();
  }
@@ -71,7 +71,7 @@ final class AppUpdates {
    PackageInfo installed=pm.getPackageInfo(activity.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES);
    if(candidate==null||!activity.getPackageName().equals(candidate.packageName)||candidate.getLongVersionCode()!=code||code<=installed.getLongVersionCode()){clear(id);show("Downloaded APK package or version did not match; discarded.");return;}
    if(candidate.signingInfo==null||installed.signingInfo==null||!sameSigners(candidate.signingInfo.getApkContentsSigners(),installed.signingInfo.getApkContentsSigners())){
-    clear(id);show("Signing key changed. A one-time manual installation from GitHub is required; this app will not install the mismatched APK.");return;}
+    clear(id);show("Signing key mismatch. Download discarded. Do not install an update with a different signing identity; report this to the developer.");return;}
    if(!pm.canRequestPackageInstalls()){
     new AlertDialog.Builder(activity).setTitle("Allow update installation?").setMessage("Android requires permission for this app to request package installation. If you allow it, return here and tap Check / install update again.").setPositiveButton("Open settings",(d,w)->activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+activity.getPackageName())))).setNegativeButton("Cancel",null).show();return;
    }
