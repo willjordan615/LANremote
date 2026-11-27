@@ -19,6 +19,7 @@ import org.json.*;
 final class LgRemote {
  private final Activity activity;
  private final boolean sessionOnly;
+ private final boolean managedTarget;
  private boolean savedOnly;
  private final SharedPreferences prefs;
  private final Handler main=new Handler(Looper.getMainLooper());
@@ -58,14 +59,15 @@ final class LgRemote {
  private String inputRequest="",pointerRequest="",nameRequest="";
  private volatile String offeredPin="";
  LgRemote(Activity a,LinearLayout parent){this(a,parent,false);}
- LgRemote(Activity a,LinearLayout parent,boolean sessionOnly){this.sessionOnly=sessionOnly;activity=a;liveKeyboard=new LiveKeyboard(a);prefs=a.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);
+ LgRemote(Activity a,LinearLayout parent,boolean sessionOnly){this(a,parent,sessionOnly,null);}
+ LgRemote(Activity a,LinearLayout parent,boolean sessionOnly,String target){this.sessionOnly=sessionOnly;managedTarget=target!=null;activity=a;liveKeyboard=new LiveKeyboard(a);prefs=a.getSharedPreferences("lg_remote",Context.MODE_PRIVATE);
   panel=new LinearLayout(a);panel.setOrientation(LinearLayout.VERTICAL);parent.addView(panel);panel.setVisibility(View.GONE);
   status=new TextView(a);status.setTextSize(13);status.setPadding(0,dp(4),0,dp(4));
   LinearLayout setup=new LinearLayout(a);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);RemoteTheme.setup(setup);
   Button setupToggle=action("TV setup ▾",()->{});setupToggle.setOnClickListener(v->{boolean show=setup.getVisibility()!=View.VISIBLE;setup.setVisibility(show?View.VISIBLE:View.GONE);setupToggle.setText(show?"TV setup ▴":"TV setup ▾");});
-  ip=new EditText(a);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_PHONE);ip.setHint("LG TV IPv4 address");ip.setText(prefs.getString("last_connected_address",prefs.getString("address","")));setup.addView(ip);
-  setup.addView(action("Find LG TVs on Wi-Fi",()->discover()));
-  setup.addView(action("TV nickname",()->renameTv()));
+  ip=new EditText(a);ip.setSingleLine(true);ip.setInputType(InputType.TYPE_CLASS_PHONE);ip.setHint("LG TV IPv4 address");ip.setText(managedTarget?target:prefs.getString("last_connected_address",prefs.getString("address","")));ip.setEnabled(!managedTarget);setup.addView(ip);
+  if(!managedTarget)setup.addView(action("Find LG TVs on Wi-Fi",()->discover()));
+  if(!managedTarget)setup.addView(action("TV nickname",()->renameTv()));
   CheckBox autoKeyboard=new CheckBox(a);autoKeyboard.setText("Automatically open phone keyboard for TV text fields");autoKeyboard.setChecked(prefs.getBoolean("auto_keyboard",true));autoKeyboard.setOnCheckedChangeListener((b,on)->prefs.edit().putBoolean("auto_keyboard",on).apply());setup.addView(autoKeyboard);
   wakeStatus=new TextView(a);wakeStatus.setTextSize(13);RemoteTheme.secondary(wakeStatus);setup.addView(wakeStatus);
   setup.addView(action("Set up TV power on",()->{if(paired&&address.equals(ip.getText().toString().trim()))learnWakeAddress();else connect();}));
@@ -76,8 +78,8 @@ final class LgRemote {
   mac=new EditText(a);mac.setSingleLine(true);mac.setHint("TV MAC from router device list");mac.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);mac.setText(manualMac(ip.getText().toString().trim()));wakeAdvanced.addView(mac);
   TextView routerHelp=new TextView(a);routerHelp.setTextSize(13);RemoteTheme.secondary(routerHelp);routerHelp.setText("Open your Wi-Fi router or mesh app, find the TV in connected devices, and copy its MAC address. Match the TV name or IP address. Do not use the router’s own MAC address.");wakeAdvanced.addView(routerHelp);
   rowIn(wakeAdvanced,action("Save manual override",()->saveMac()),action("Use automatic",()->clearManualMac()));setup.addView(wakeAdvanced);
-  legacy=new CheckBox(a);legacy.setText("Legacy unencrypted Wi-Fi (port 3000)");legacy.setChecked(prefs.getBoolean("last_connected_legacy",prefs.getBoolean("legacy",false)));setup.addView(legacy);
-  rowIn(setup,action("Connect / pair",()->connect()),action("Disconnect",()->{prefs.edit().putBoolean("tv_reconnect_paused",true).apply();disconnect("Disconnected.");}));
+  legacy=new CheckBox(a);legacy.setText("Legacy unencrypted Wi-Fi (port 3000)");legacy.setChecked(managedTarget?prefs.getBoolean("legacy_"+target,false)&&prefs.getString("key_"+target,"").isEmpty():prefs.getBoolean("last_connected_legacy",prefs.getBoolean("legacy",false)));setup.addView(legacy);
+  rowIn(setup,action("Connect / pair",()->connect()),action("Disconnect",()->{prefs.edit().putBoolean(pauseKey(),true).apply();disconnect("Disconnected.");}));
   setup.addView(action("Forget TV pairing / certificate",()->new AlertDialog.Builder(activity).setMessage("Forget the saved TV identity and pairing? Only do this if the TV was reset or its certificate changed.").setPositiveButton("Forget",(d,w)->{String s=ip.getText().toString().trim();disconnect("Pairing forgotten. Connect again.");prefs.edit().remove("pin_"+s).remove("key_"+s).remove("key_legacy_"+s).apply();}).setNegativeButton("Cancel",null).show()));
   TextView hint=new TextView(a);hint.setTextSize(13);RemoteTheme.secondary(hint);hint.setText("Accept pairing on the TV. SIMPLINK depends on attached devices. For power on, enable TV On With Mobile / Turn on via Wi-Fi in the TV settings. LANremote tries both learned network addresses unless a manual override is saved.");setup.addView(hint);
   inputs=new Spinner(a);setup.addView(inputs,new LinearLayout.LayoutParams(-1,dp(48)));
@@ -191,12 +193,13 @@ final class LgRemote {
    SSLContext tls=SSLContext.getInstance("TLS");tls.init(null,new TrustManager[]{tm},new SecureRandom());b.sslSocketFactory(tls.getSocketFactory(),tm).hostnameVerifier((host,session)->host.equals(target)&&!expected.isEmpty());
   }return b.build();
  }
+ private String pauseKey(){return managedTarget?"paused_"+ip.getText().toString().trim():"tv_reconnect_paused";}
  void resumeForeground(){resumeForeground(true);}
- void resumeForeground(boolean tv){suspended=false;tvActive=tv;if(sessionOnly){if(sessionConfigured()&&!prefs.getBoolean("tv_reconnect_paused",false))connect();}else if(tv)restoreSaved();else message("TV connection resting • select TV to connect.");}
- void controlMode(boolean tv){tvActive=tv;main.removeCallbacks(idleClose);if(suspended||sessionOnly)return;if(tv)restoreSaved();else scheduleIdle();}
+ void resumeForeground(boolean tv){suspended=false;tvActive=tv;if(sessionOnly){if(tv&&sessionConfigured()&&!prefs.getBoolean(pauseKey(),false))connect();}else if(tv)restoreSaved();else message("TV connection resting • select TV to connect.");}
+ void controlMode(boolean tv){tvActive=tv;main.removeCallbacks(idleClose);if(suspended)return;if(sessionOnly){if(tv&&sessionConfigured()&&!prefs.getBoolean(pauseKey(),false))connect();else if(!tv&&(paired||connecting))disconnect("TV connection resting.");return;}if(tv)restoreSaved();else scheduleIdle();}
  void suspendForeground(){suspended=true;main.removeCallbacks(idleClose);if(paired||connecting||control!=null||pointer!=null)disconnect("TV connection resting • reconnects when remote opens.");else liveKeyboard.close();}
- void restoreSaved(){if(disposed||suspended||sessionOnly||connecting||paired||prefs.getBoolean("tv_reconnect_paused",false)||!sessionConfigured())return;String target=ip.getText().toString().trim();if(!target.equals(prefs.getString("last_connected_address",prefs.getString("address",""))))return;savedOnly=true;open(target,legacy.isChecked());}
- void connect(){if(disposed||suspended)return;if(!sessionOnly){savedOnly=false;prefs.edit().putBoolean("tv_reconnect_paused",false).apply();}if(sessionOnly){if(connecting||paired)return;if(!sessionConfigured()){message("Unlock to pair or configure the TV.");return;}}String target=ip.getText().toString().trim();if(!privateIP(target)){pendingInput="";pendingOff=false;pendingSettings="";message("Enter the private IPv4 address of your LG TV.");return;}
+ void restoreSaved(){if(disposed||suspended||sessionOnly||connecting||paired||prefs.getBoolean(pauseKey(),false)||!sessionConfigured())return;String target=ip.getText().toString().trim();if(!managedTarget&&!target.equals(prefs.getString("last_connected_address",prefs.getString("address",""))))return;savedOnly=true;open(target,legacy.isChecked());}
+ void connect(){if(disposed||suspended)return;if(!sessionOnly){savedOnly=false;prefs.edit().putBoolean(pauseKey(),false).apply();}if(sessionOnly){if(connecting||paired)return;if(!sessionConfigured()){message("Unlock to pair or configure the TV.");return;}}String target=ip.getText().toString().trim();if(!privateIP(target)){pendingInput="";pendingOff=false;pendingSettings="";message("Enter the private IPv4 address of your LG TV.");return;}
   boolean plain=legacy.isChecked();if(plain&&!prefs.getBoolean("legacy_"+target,false)){new AlertDialog.Builder(activity).setTitle("Unencrypted connection").setMessage("Older LG TVs may require unencrypted local Wi-Fi. Only use on a trusted home network. Pairing credentials and commands are not encrypted.").setPositiveButton("Use legacy mode",(d,w)->{prefs.edit().putBoolean("legacy_"+target,true).apply();open(target,true);}).setNegativeButton("Cancel",(d,w)->{pendingInput="";pendingOff=false;pendingSettings="";}).setOnCancelListener(d->{pendingInput="";pendingOff=false;pendingSettings="";}).show();return;}open(target,plain);
  }
  private void open(String target,boolean plain){if(disposed||suspended)return;String queued=pendingInput;boolean off=pendingOff;String settings=pendingSettings;disconnect("Connecting…");pendingInput=queued;pendingOff=off;pendingSettings=settings;address=target;pin=prefs.getString("pin_"+target,"");offeredPin="";connecting=true;scheduleIdle();prefs.edit().putString("address",target).putBoolean("legacy",plain).apply();final int g=generation;final String expected=pin;
