@@ -36,6 +36,8 @@ jobs:
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.IdlePolicyTest
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/TvPlatform.java android/tests/TvPlatformTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.TvPlatformTest
+          javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RokuKeys.java android/tests/RokuKeysTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.RokuKeysTest
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/HostIdentity.java android/tests/HostIdentityTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.HostIdentityTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/TextEdit.java android/app/src/main/java/com/lanremote/bluetooth/RelayWire.java android/tests/RelayWireTest.java android/tests/TextEditTest.java
