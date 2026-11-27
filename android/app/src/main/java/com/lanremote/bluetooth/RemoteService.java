@@ -22,7 +22,7 @@ public class RemoteService extends Service {
  private final ArrayDeque<KeyReport> queue=new ArrayDeque<>();
  private static final class KeyReport {final int id;final byte[] data;final boolean motion;KeyReport(int id,byte[] data){this(id,data,false);}KeyReport(int id,byte[] data,boolean motion){this.id=id;this.data=data;this.motion=motion;}}
  private int mouseAccepted,mouseRejected,mouseBusy,clickAccepted,clickRejected;private String mouseProtocol="not reported",mouseError="";
- public String mouseDiagnostics(){return "Experimental box cursor: "+(remotePrefs().getBoolean("box_cursor_trial",false)?"enabled":"disabled")+"\n"+ "Bluetooth mouse report ID 3 (original three-byte format)\nHost protocol: "+mouseProtocol+"\nMotion reports accepted by Android: "+mouseAccepted+"\nClick presses accepted: "+clickAccepted+"\nClick presses/releases rejected: "+clickRejected+"\nMotion rejected: "+mouseRejected+"\nDropped while busy: "+mouseBusy+(mouseError.isEmpty()?"":"\nLast error: "+mouseError)+"\nAcceptance is not proof of cursor movement on the box.";}
+ public String mouseDiagnostics(){return "Bluetooth cursor: "+(remotePrefs().getBoolean("box_cursor_trial",true)?"enabled":"disabled")+"\n"+ "Bluetooth mouse report ID 3 (original three-byte format)\nHost protocol: "+mouseProtocol+"\nMotion reports accepted by Android: "+mouseAccepted+"\nClick presses accepted: "+clickAccepted+"\nClick presses/releases rejected: "+clickRejected+"\nMotion rejected: "+mouseRejected+"\nDropped while busy: "+mouseBusy+(mouseError.isEmpty()?"":"\nLast error: "+mouseError)+"\nAcceptance is not proof of cursor movement on the box.";}
  private int sendGeneration;
  private String status="Starting Bluetooth remote…";
  private final Handler handler=new Handler(Looper.getMainLooper());
@@ -123,7 +123,7 @@ public class RemoteService extends Service {
  private void pauseRelay(){if(relay!=null){relay.close();relay=null;pairingChanged(null);if(!stopped)message(ready()?"Connected: "+name(host):"Wi-Fi sharing stopped.");}}
  private byte receiveRelay(byte[] command){if(!ready()||stopped||relay==null)return 1;if(command.length==0)return 2;try{if(command[0]==0&&command.length==1)return 0;if(command[0]==1&&command.length==4){int report=command[1]&255,usage=((command[2]&255)<<8)|(command[3]&255);if(!RelayWire.allowed(report,usage)||queue.size()>=512)return 2;send(report,usage);return 0;}if(command[0]==3&&command.length==3){int x=command[1],y=command[2];if(!RelayWire.validMovement(x,y))return 2;return movePointer(x,y)?(byte)0:(byte)2;}if(command[0]==2&&command.length<=501){sendText(new String(command,1,command.length-1,java.nio.charset.StandardCharsets.UTF_8));return 0;}}catch(RuntimeException ignored){}return 2;}
  private void clearQueue(){queue.clear();sending=false;sendGeneration++;}
- public boolean movePointer(int x,int y){if(!remotePrefs().getBoolean("box_cursor_trial",false))return false;return enqueueMotion(x,y);}
+ public boolean movePointer(int x,int y){if(!remotePrefs().getBoolean("box_cursor_trial",true))return false;return enqueueMotion(x,y);}
  public boolean testMouseMotion(){return enqueueMotion(60,0);}
  private boolean enqueueMotion(int x,int y){if(!ready()||stopped||hid==null||!RelayWire.validMovement(x,y))return false;if(!queue.isEmpty()){mouseBusy++;return false;}queue.add(new KeyReport(3,HidKeys.movement(x,y),true));pump();return true;}
  public void repeatKey(int report,int usage){if(ready()&&!sending&&queue.isEmpty())send(report,usage);}

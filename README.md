@@ -113,3 +113,6 @@ Native Android keyboard-tap haptics on button clicks and touchpad taps, respecti
 
 ## Isolated Bluetooth mouse tests (0.6.13)
 Mouse diagnostics now offers explicit left, right and one-shot relative motion tests with refreshed counters. The one-shot test works even with the gesture trial disabled. Preserve protocol negotiation callbacks arriving before connection completion. The HID descriptor and press/release format remain identical to the pre-touchpad baseline. Android send acceptance cannot establish host cursor behavior; physical test required.
+
+## Virtual mouse thumbstick (0.6.14)
+The collapsible cursor control is now a fixed-center analog stick. Hold toward any direction for continuous mouse movement; further deflection increases speed, a central dead zone prevents drift, release stops and recenters. Runs only during a held deflection, up to 25 reports/sec. Separate left/right mouse buttons and directional controls remain unchanged. No tap-to-click on stick to avoid accidental clicks. Both normal and restricted sessions use it for LG/direct Bluetooth/relay. Bluetooth cursor defaults enabled for unset preferences after user confirmed compatibility; explicit existing off preference remains respected. No HID descriptor, report format or pairing changes. Cursor math tests run in CI; hardware feel still needs testing.

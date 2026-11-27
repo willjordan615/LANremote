@@ -1,38 +1,48 @@
 package com.lanremote.bluetooth;
 
 import android.content.Context;
-import android.os.SystemClock;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.view.*;
 import android.widget.*;
 
+// Collapsible, fixed-center virtual mouse thumbstick.
 final class Touchpad extends LinearLayout {
  interface Motion {void move(int x,int y);}
- private final TextView pad;
  private final Button toggle;
- private final Motion motion;
- private final Runnable click;
- private float lastX,lastY,downX,downY,dx,dy;
- private long lastSent,downTime;
- private boolean tracking,moved;
- private final float density,slop;
- Touchpad(Context c,Motion motion,Runnable click){super(c);this.motion=motion;this.click=click;density=getResources().getDisplayMetrics().density;slop=ViewConfiguration.get(c).getScaledTouchSlop();setOrientation(VERTICAL);
-  toggle=new RemoteButton(c);toggle.setAllCaps(false);toggle.setText("Touchpad ▾");addView(toggle,new LayoutParams(-1,RemoteTheme.dp(c,48)));
-  pad=new TextView(c);pad.setText("Drag to move • Tap to click");pad.setTextColor(RemoteTheme.MUTED);pad.setGravity(Gravity.CENTER);pad.setBackground(RemoteTheme.shape(c,RemoteTheme.MUTED_SURFACE,12,RemoteTheme.BORDER));pad.setContentDescription("Mouse touchpad");pad.setVisibility(GONE);pad.setEnabled(false);pad.setText("Connect your device to move the cursor");LayoutParams lp=new LayoutParams(-1,RemoteTheme.dp(c,156));lp.setMargins(RemoteTheme.dp(c,3),RemoteTheme.dp(c,2),RemoteTheme.dp(c,3),RemoteTheme.dp(c,2));addView(pad,lp);
-  toggle.setOnClickListener(v->{boolean open=pad.getVisibility()!=VISIBLE;reset();pad.setVisibility(open?VISIBLE:GONE);toggle.setText(open?"Touchpad ▴":"Touchpad ▾");toggle.setSelected(open);});
-  pad.setOnTouchListener((v,e)->touch(e));pad.setOnClickListener(v->{if(pad.isEnabled()){RemoteButton.feedback(pad);click.run();}});
+ private final Stick stick;
+ private final TextView caption;
+ Touchpad(Context c,Motion motion){
+  super(c);setOrientation(VERTICAL);
+  toggle=new RemoteButton(c);toggle.setAllCaps(false);toggle.setText("Mouse cursor ▾");addView(toggle,new LayoutParams(-1,RemoteTheme.dp(c,48)));
+  stick=new Stick(c,motion);stick.setVisibility(GONE);stick.setEnabled(false);
+  addView(stick,new LayoutParams(-1,RemoteTheme.dp(c,166)));
+  caption=new TextView(c);caption.setTextSize(12);caption.setGravity(Gravity.CENTER);caption.setTextColor(RemoteTheme.MUTED);caption.setText("Connect your device to move the cursor");caption.setVisibility(GONE);addView(caption);
+  toggle.setOnClickListener(v->{boolean open=stick.getVisibility()!=VISIBLE;stick.stop();stick.setVisibility(open?VISIBLE:GONE);caption.setVisibility(open?VISIBLE:GONE);toggle.setText(open?"Mouse cursor ▴":"Mouse cursor ▾");toggle.setSelected(open);});
  }
- void available(boolean ready,String unavailable){String label=ready?"Drag to move • Tap to click":unavailable;if(pad.isEnabled()==ready&&label.contentEquals(pad.getText()))return;pad.setEnabled(ready);pad.setText(label);if(!ready)reset();}
- private void reset(){tracking=false;moved=false;dx=dy=0;if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);}
- private void flush(){int x=Math.max(-127,Math.min(127,Math.round(dx))),y=Math.max(-127,Math.min(127,Math.round(dy)));dx=dy=0;if(x!=0||y!=0){motion.move(x,y);lastSent=SystemClock.uptimeMillis();}}
- private boolean touch(MotionEvent e){
-  if(!pad.isEnabled())return false;
-  switch(e.getActionMasked()){
-   case MotionEvent.ACTION_DOWN: tracking=true;moved=false;downX=lastX=e.getX();downY=lastY=e.getY();dx=dy=0;downTime=SystemClock.uptimeMillis();lastSent=0;if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(true);return true;
-   case MotionEvent.ACTION_POINTER_DOWN:reset();return true;
-   case MotionEvent.ACTION_MOVE:if(!tracking||e.getPointerCount()!=1)return true;float x=e.getX(),y=e.getY();if(!moved&&Math.hypot(x-downX,y-downY)>slop)moved=true;if(moved){dx+=(x-lastX)/density*1.6f;dy+=(y-lastY)/density*1.6f;if(SystemClock.uptimeMillis()-lastSent>=40)flush();}lastX=x;lastY=y;return true;
-   case MotionEvent.ACTION_UP:if(tracking){if(moved)flush();else if(SystemClock.uptimeMillis()-downTime<350)pad.performClick();}reset();return true;
-   case MotionEvent.ACTION_CANCEL:reset();return true;
+ void available(boolean ready,String unavailable){String label=ready?"Hold to move • Release to stop":unavailable;if(stick.isEnabled()!=ready){stick.stop();stick.setEnabled(ready);stick.invalidate();}if(!label.contentEquals(caption.getText()))caption.setText(label);}
+ void cancelMotion(){stick.stop();}
+ private static final class Stick extends View {
+  private final Motion motion;
+  private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+  private float x,y;
+  private int finger=-1;
+  private boolean ticking;
+  private final Runnable tick=new Runnable(){public void run(){ticking=false;if(!usable()) {stop();return;}int dx=CursorMath.step(x,y,true),dy=CursorMath.step(x,y,false);if(dx!=0||dy!=0){motion.move(dx,dy);schedule(40);}}};
+  Stick(Context c,Motion motion){super(c);this.motion=motion;setContentDescription("Mouse cursor thumbstick. Drag and hold to move; release to stop.");setFocusable(true);}
+  private float radius(){return Math.min(getWidth(),getHeight())*0.43f;}
+  private boolean usable(){return finger>=0&&isEnabled()&&isShown()&&hasWindowFocus();}
+  private void schedule(int delay){if(!ticking){ticking=true;postDelayed(tick,delay);}}
+  void stop(){finger=-1;x=y=0;removeCallbacks(tick);ticking=false;invalidate();if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);}
+  private void position(float px,float py){float travel=Math.max(1,radius()*0.64f);float nx=(px-getWidth()/2f)/travel,ny=(py-getHeight()/2f)/travel;double r=Math.hypot(nx,ny);float scale=(float)Math.max(1,r);x=nx/scale;y=ny/scale;invalidate();if(usable()&&Math.hypot(x,y)>CursorMath.DEAD)schedule(0);else{removeCallbacks(tick);ticking=false;}}
+  @Override protected void onDraw(Canvas c){super.onDraw(c);float cx=getWidth()/2f,cy=getHeight()/2f,r=radius();if(r<=0)return;paint.setStyle(Paint.Style.FILL);paint.setColor(RemoteTheme.MUTED_SURFACE);c.drawCircle(cx,cy,r,paint);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(RemoteTheme.dp(getContext(),1));paint.setColor(RemoteTheme.BORDER);c.drawCircle(cx,cy,r,paint);paint.setColor(RemoteTheme.DISABLED);float p=r*.79f,mark=r*.07f;c.drawLine(cx-mark,cy-p,cx+mark,cy-p,paint);c.drawLine(cx-mark,cy+p,cx+mark,cy+p,paint);c.drawLine(cx-p,cy-mark,cx-p,cy+mark,paint);c.drawLine(cx+p,cy-mark,cx+p,cy+mark,paint);paint.setStyle(Paint.Style.FILL);paint.setColor(!isEnabled()?RemoteTheme.SURFACE:finger>=0?RemoteTheme.ACTIVE:0xff777777);c.drawCircle(cx+x*r*.64f,cy+y*r*.64f,r*.32f,paint);}
+  @Override public boolean onTouchEvent(MotionEvent e){if(!isEnabled())return false;switch(e.getActionMasked()){
+   case MotionEvent.ACTION_DOWN:if(Math.hypot(e.getX()-getWidth()/2f,e.getY()-getHeight()/2f)>radius())return false;finger=e.getPointerId(0);if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(true);RemoteButton.feedback(this);position(e.getX(),e.getY());return true;
+   case MotionEvent.ACTION_MOVE:int index=e.findPointerIndex(finger);if(index<0)stop();else position(e.getX(index),e.getY(index));return true;
+   case MotionEvent.ACTION_POINTER_DOWN:case MotionEvent.ACTION_POINTER_UP:case MotionEvent.ACTION_UP:case MotionEvent.ACTION_CANCEL:stop();return true;
    default:return true;
-  }
+  }}
+  @Override public void onWindowFocusChanged(boolean focus){if(!focus)stop();super.onWindowFocusChanged(focus);}
+  @Override protected void onDetachedFromWindow(){stop();super.onDetachedFromWindow();}
  }
 }

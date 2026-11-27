@@ -30,6 +30,8 @@ jobs:
           mkdir -p /tmp/lanremote-hid-test
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/HidKeys.java android/tests/HidKeysTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.HidKeysTest
+          javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/CursorMath.java android/tests/CursorMathTest.java
+          java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.CursorMathTest
           javac -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/HostIdentity.java android/tests/HostIdentityTest.java
           java -cp /tmp/lanremote-hid-test com.lanremote.bluetooth.HostIdentityTest
           javac -cp /tmp/lanremote-hid-test -d /tmp/lanremote-hid-test android/app/src/main/java/com/lanremote/bluetooth/RelayWire.java android/tests/RelayWireTest.java

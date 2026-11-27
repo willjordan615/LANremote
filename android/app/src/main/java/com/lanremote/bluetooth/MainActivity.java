@@ -64,7 +64,7 @@ public class MainActivity extends Activity {
   Button menu=dual("Menu",2,0x40,"INPUT",true);modeLabels.put(menu,new String[]{"Menu","Inputs"});
   row(root,settings,dual("▼",1,0x51,"DOWN",true),menu);
   gap(root,10);
-  touchpad=new Touchpad(this,this::movePointer,()->{if(tvMode){if(lg!=null&&lg.ready(true))lg.remoteAction("click");}else send(3,1);});root.addView(touchpad);
+  touchpad=new Touchpad(this,this::movePointer);root.addView(touchpad);
   mouseRow(root);
   gap(root,10);
   row(root,dual("Vol −",2,0xEA,"volumeDown",false),dual("Mute",2,0xE2,"MUTE",true),dual("Vol +",2,0xE9,"volumeUp",false));
@@ -82,7 +82,7 @@ public class MainActivity extends Activity {
   row(setup,action("Refresh",()->refresh()),action("Select / connect",()->connectSelected()),action("Stop",()->{pauseBox(true);relayMain.removeCallbacks(startupDiscovery);stopRelaySearch();stopRecovery();stopGuest();if(service!=null)service.shutdown();detach();started=false;message("Remote stopped. Open setup to enable.");}));
   CheckBox haptics=new CheckBox(this);haptics.setText("Button haptic feedback");haptics.setChecked(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("haptics",true));haptics.setOnCheckedChangeListener((b,on)->getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("haptics",on).apply());setup.addView(haptics);
   row(setup,action("Mouse diagnostics",()->mouseDiagnostics()));
-  CheckBox cursorTrial=new CheckBox(this);cursorTrial.setText("Experimental box cursor (verify clicks first)");cursorTrial.setChecked(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",false));cursorTrial.setOnCheckedChangeListener((b,on)->{getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("box_cursor_trial",on).apply();refreshControls();});setup.addView(cursorTrial);
+  CheckBox cursorTrial=new CheckBox(this);cursorTrial.setText("Enable Bluetooth mouse cursor");cursorTrial.setChecked(getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true));cursorTrial.setOnCheckedChangeListener((b,on)->{getSharedPreferences("remote",MODE_PRIVATE).edit().putBoolean("box_cursor_trial",on).apply();refreshControls();});setup.addView(cursorTrial);
   row(setup,action("Nickname",()->renameSelected()),action("Forget target",()->forgetSelected()));
   gap(setup,8);
   row(setup,action("Share over Wi-Fi",()->shareRelay()),action("Stop sharing",()->{if(service!=null)service.stopRelay();}));
@@ -97,7 +97,7 @@ public class MainActivity extends Activity {
   updates=new AppUpdates(this,updateStatus);row(root,action("Check / install update",()->updates.check(true)));
   LockRemoteActivity.publish(this);message("Open Bluetooth setup to connect.");refresh();root.postDelayed(()->updates.check(false),1200);
  }
- private void selectMode(boolean tv){tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);
+ private void selectMode(boolean tv){if(touchpad!=null)touchpad.cancelMotion();tvMode=tv;bluetoothPanel.setVisibility(tv?View.GONE:View.VISIBLE);if(lg!=null)lg.visible(tv);
   boxModeButton.setSelected(!tv);tvModeButton.setSelected(tv);
   for(Map.Entry<Button,String[]> e:modeLabels.entrySet())e.getKey().setText(e.getValue()[tv?1:0]);
   for(Map.Entry<Button,String[]> e:modeDescriptions.entrySet())e.getKey().setContentDescription(e.getValue()[tv?1:0]);
@@ -105,16 +105,16 @@ public class MainActivity extends Activity {
  }
  private void gap(LinearLayout parent,int height){View v=new View(this);parent.addView(v,new LinearLayout.LayoutParams(-1,dp(height)));}
  private void mouseDiagnostics(){if(service==null||!service.ready()){new AlertDialog.Builder(this).setTitle("Mouse diagnostics").setMessage("Run this on the phone directly connected to the Bluetooth device. If using Wi-Fi sharing, check the host phone.").setPositiveButton("Close",null).show();return;}
-  LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(16),dp(8),dp(16),dp(8));TextView report=new TextView(this);report.setText(service.mouseDiagnostics());content.addView(report);TextView hint=new TextView(this);hint.setText("Use a safe screen on the box. These tests send actual mouse reports, not directional keys. Keep a physical remote available. The one-shot cursor test does not enable experimental gesture movement.");content.addView(hint);
+  LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(16),dp(8),dp(16),dp(8));TextView report=new TextView(this);report.setText(service.mouseDiagnostics());content.addView(report);TextView hint=new TextView(this);hint.setText("Use a safe screen on the box. These tests send actual mouse reports, not directional keys. Keep a physical remote available. The one-shot cursor test does not enable continuous cursor movement.");content.addView(hint);
   android.os.Handler ui=new android.os.Handler(android.os.Looper.getMainLooper());
   Runnable refreshReport=()->{if(service!=null)report.setText(service.mouseDiagnostics());};
   row(content,action("Left click",()->{if(service!=null)service.send(3,1);ui.postDelayed(refreshReport,150);}),action("Right click",()->{if(service!=null)service.send(3,2);ui.postDelayed(refreshReport,150);}));
   row(content,action("Test motion",()->{if(service!=null)service.testMouseMotion();ui.postDelayed(refreshReport,150);}),action("Refresh",refreshReport));
   new AlertDialog.Builder(this).setTitle("Mouse diagnostics").setView(content).setPositiveButton("Close",null).show();
  }
- private void movePointer(int x,int y){if(!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",false))return;if(tvMode){if(lg!=null)lg.movePointer(x,y);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.movePointer(x,y);}else if(service!=null)service.movePointer(x,y);}
+ private void movePointer(int x,int y){if(!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true))return;if(tvMode){if(lg!=null)lg.movePointer(x,y);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.movePointer(x,y);}else if(service!=null)service.movePointer(x,y);}
  private void refreshDeviceLabels(){if(boxModeButton==null||tvModeButton==null)return;String box=DeviceLabels.box(this),tv=lg==null?"Set up TV":lg.deviceLabel();if(!box.contentEquals(boxModeButton.getText()))boxModeButton.setText(box);if(!tv.contentEquals(tvModeButton.getText()))tvModeButton.setText(tv);boxModeButton.setContentDescription(box);tvModeButton.setContentDescription(tv);}
- private void refreshControls(){refreshDeviceLabels();boolean bt=!relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer):bt);}if(touchpad!=null)touchpad.available(tvMode?lg!=null&&lg.ready(true):bt&&getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",false),!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",false)?"Box cursor trial is off; click buttons remain active.":"Connect your device to move the cursor");}
+ private void refreshControls(){refreshDeviceLabels();boolean bt=!relayInvite.isEmpty()?guest!=null&&guest.ready():service!=null&&service.ready();for(Button b:controls){boolean pointer=Boolean.TRUE.equals(pointerControls.get(b));b.setEnabled(tvMode?lg!=null&&lg.ready(pointer):bt);}if(touchpad!=null)touchpad.available(tvMode?lg!=null&&lg.ready(true):bt&&getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true),!tvMode&&!getSharedPreferences("remote",MODE_PRIVATE).getBoolean("box_cursor_trial",true)?"Bluetooth cursor is off; click buttons remain active.":"Connect your device to move the cursor");}
  private Button dualAction(String label,Runnable bluetooth,Runnable tv,boolean pointer){Button b=action(label,()->{if(tvMode)tv.run();else bluetooth.run();});controls.add(b);pointerControls.put(b,pointer);b.setEnabled(false);return b;}
  private Button dual(String label,int report,int usage,String tv,boolean pointer){Button b=dualAction(label,()->send(report,usage),()->lg.remoteAction(tv),pointer);if(RemoteButton.repeatable(report,usage))((RemoteButton)b).repeat(()->repeatKey(report,usage,tv,pointer),()->foreground&&b.isEnabled());return b;}
  private void repeatKey(int report,int usage,String command,boolean pointer){if(tvMode){if(lg!=null&&lg.ready(pointer))lg.remoteAction(command);}else if(!relayInvite.isEmpty()){if(guest!=null&&guest.ready())guest.repeatKey(report,usage);}else if(service!=null)service.repeatKey(report,usage);}
@@ -161,7 +161,7 @@ public class MainActivity extends Activity {
  @Override protected void onStart(){super.onStart();foreground=true;explicitDirect=false;if(lg!=null)lg.restoreSaved();if(boxPaused()){message("Remote paused. Tap Enable to reconnect.");return;}if(!relayInvite.isEmpty()){startGuest();return;}if(!bound)bound=bindService(new Intent(this,RemoteService.class),serviceConnection,0);relayMain.postDelayed(startupDiscovery,700);}
  @Override protected void onResume(){super.onResume();if(relayInvite.isEmpty()&&service!=null){showApproval();if(explicitDirect)service.resumeRemote();}}
  private void detach(){if(service!=null)service.observe(null);if(bound){unbindService(serviceConnection);bound=false;}service=null;refreshControls();}
- @Override protected void onStop(){foreground=false;relayMain.removeCallbacks(startupDiscovery);stopRecovery();cancelPairGuest();dismissApproval();stopRelaySearch();stopGuest();detach();super.onStop();}
+ @Override protected void onStop(){if(touchpad!=null)touchpad.cancelMotion();foreground=false;relayMain.removeCallbacks(startupDiscovery);stopRecovery();cancelPairGuest();dismissApproval();stopRelaySearch();stopGuest();detach();super.onStop();}
  private String name(BluetoothDevice d){try{String n=d.getName();return n==null?d.getAddress():n;}catch(SecurityException e){return "Bluetooth device";}}
  private void discoverable(){if(!ensure())return;if(service==null||!service.registered()){message("Enable the Bluetooth remote first.");return;}Intent i=new Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);i.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,300);startActivityForResult(i,12);}
  private String savedTarget(){if(service!=null)return service.lastAddress();android.content.SharedPreferences p=getSharedPreferences("remote",MODE_PRIVATE);return HostIdentity.initial(p.getString("selectedHost",null),p.getString("lastHost",""));}
