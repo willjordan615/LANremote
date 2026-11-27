@@ -1,7 +1,7 @@
 package com.lanremote.bluetooth;
 import java.util.Locale;
 enum TvPlatform {
- LG("LG webOS"), SAMSUNG("Samsung Tizen"), ROKU("Roku"), ANDROID("Android / Google TV"), NONE("Set up TV");
+ LG("LG webOS"), SAMSUNG("Samsung Tizen"), ROKU("Roku"), ANDROID("Android / Google TV"), FIRE("Fire TV"), VIDAA("VIDAA"), SONY("Sony BRAVIA IP"), PHILIPS("Philips Saphi / Titan OS"), APPLE("Apple TV"), NONE("Set up TV");
  final String label;TvPlatform(String label){this.label=label;}
  static TvPlatform saved(String value){try{return valueOf(value);}catch(Exception e){return NONE;}}
  static TvPlatform service(String value){String s=value.toLowerCase(Locale.ROOT);if(s.equals("urn:lge-com:service:webos-second-screen:1"))return LG;if(s.equals("urn:samsung.com:device:remotecontrolreceiver:1")||s.equals("urn:samsung.com:service:multiscreenservice:1"))return SAMSUNG;if(s.equals("roku:ecp"))return ROKU;return NONE;}
