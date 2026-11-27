@@ -13,7 +13,7 @@ final class TvDiscovery {
   try(MulticastSocket socket=new MulticastSocket(null)){
    socket.bind(new InetSocketAddress(0));network.network.bindSocket(socket);socket.setTimeToLive(1);socket.setSoTimeout(350);
    InetAddress multicast=InetAddress.getByName("239.255.255.250");
-   for(String service:new String[]{LgDiscovery.SERVICE,"urn:samsung.com:device:RemoteControlReceiver:1","urn:samsung.com:service:MultiScreenService:1","roku:ecp"}){
+   for(String service:new String[]{LgDiscovery.SERVICE,"urn:samsung.com:device:RemoteControlReceiver:1","urn:samsung.com:service:MultiScreenService:1","roku:ecp","urn:schemas-sony-com:service:IRCC:1"}){
     byte[] bytes=("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: "+service+"\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
     socket.send(new DatagramPacket(bytes,bytes.length,multicast,1900));
    }
